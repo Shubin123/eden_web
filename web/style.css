@@ -1,0 +1,162 @@
+:root {
+  --bg-primary: #12141a;
+  --bg-secondary: #1a1d26;
+  --border-color: #2e3444;
+  --text-main: #f0f3f8;
+  --text-muted: #8c96a8;
+  --accent: #e60012;
+  --accent-hover: #ff2a3c;
+  --accent-cyan: #00c3e3;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.app-header {
+  height: 56px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+
+.header-status {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  position: relative;
+  background-color: #000;
+}
+
+.viewport-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background-color: #000;
+  outline: none;
+}
+
+.drop-zone {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(18, 20, 26, 0.95);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.drop-zone.dragover {
+  background-color: rgba(30, 36, 48, 0.98);
+  border: 2px dashed var(--accent-cyan);
+}
+
+.drop-prompt {
+  text-align: center;
+  padding: 40px;
+}
+
+.upload-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.drop-prompt h2 {
+  font-size: 1.25rem;
+  margin-bottom: 8px;
+}
+
+.drop-prompt p {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.controls-bar {
+  height: 50px;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+
+.control-group {
+  display: flex;
+  gap: 10px;
+}
+
+.btn {
+  background-color: #2b3040;
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+  background-color: #383f54;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status-group {
+  display: flex;
+  gap: 20px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}

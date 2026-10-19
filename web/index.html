@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eden Web (WASM)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app-container">
+    <header class="app-header">
+      <div class="logo">
+        <span class="icon">⚡</span>
+        <h1>Eden Web</h1>
+      </div>
+      <div class="header-status" id="header-status">Ready</div>
+    </header>
+
+    <main class="main-content">
+      <div class="viewport-wrapper">
+        <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+        <div id="drop-zone" class="drop-zone">
+          <div class="drop-prompt">
+            <span class="upload-icon">📁</span>
+            <h2>Drop Nintendo Switch ROM (.nsp, .xci, .nro) here</h2>
+            <p>or click to select file</p>
+            <input type="file" id="file-input" accept=".nsp,.xci,.nro" style="display: none;">
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="controls-bar">
+      <div class="control-group">
+        <button id="btn-fullscreen" class="btn">Fullscreen</button>
+        <button id="btn-pause" class="btn" disabled>Pause</button>
+        <button id="btn-reset" class="btn" disabled>Reset</button>
+      </div>
+      <div class="status-group">
+        <span id="fps-counter">FPS: --</span>
+        <span id="backend-status">Status: Standby</span>
+      </div>
+    </footer>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
