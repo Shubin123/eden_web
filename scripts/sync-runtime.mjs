@@ -13,7 +13,8 @@ try {
   const files = await readdir(source);
   let count = 0;
   for (const file of files) {
-    if (file.endsWith('.wasm') || file.endsWith('.js') || file.endsWith('.data')) {
+    // Only the browser runtime; the headless runner and test binaries also live in bin/.
+    if (/^eden\.(wasm|js|data)$/.test(file)) {
       await copyFile(path.join(source, file), path.join(destination, file));
       count++;
     }

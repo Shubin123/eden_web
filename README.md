@@ -8,6 +8,7 @@ A WebAssembly frontend and test harness for the Eden Nintendo Switch emulator po
 ## Architecture
 
 - **`web/index.html`**: Switch console simulation UI with Neon Joy-Cons, canvas screen, drop zone, WASM binary status card, and keyboard controls.
+- **`web/system-files.js`**: Keys & firmware importer. Unpacks `prod.keys`/`title.keys` and firmware `.zip` dumps in the browser, persists them in IndexedDB, and mounts them into Eden's data directory before `eden_init`.
 - **`web/app.js`**: Frontend runtime driver managing the WebAssembly lifecycle, mounting ROMs into the virtual filesystem (MEMFS), and stepping emulation frames.
 - **`web/eden.js` & `web/eden.wasm`**: Compiled WebAssembly binary artifacts providing the C API exports (`eden_init`, `eden_load_rom`, `eden_step_frame`, etc.).
 - **`web/coi-serviceworker.js`**: Cross-Origin Isolation Service Worker enabling `SharedArrayBuffer` and multi-threading on GitHub Pages.
@@ -24,7 +25,8 @@ A WebAssembly frontend and test harness for the Eden Nintendo Switch emulator po
    npm start
    ```
 2. Navigate to `http://localhost:8080` in Chrome, Edge, or Firefox.
-3. Drop a decrypted Nintendo Switch ROM (`.nsp`, `.xci`) or homebrew executable (`.nro`).
+3. In the **System Files** card, add your `prod.keys` (or a keys `.zip`) and a firmware `.zip` dumped from your own console.
+4. Drop a decrypted Nintendo Switch ROM (`.nsp`, `.xci`) or homebrew executable (`.nro`).
 
 ### Smoke Tests
 

@@ -82,11 +82,41 @@
 
       <!-- Dashboard Cards -->
       <section class="dashboard-grid">
+        <!-- Keys & Firmware Card -->
+        <div class="card" id="system-files-card">
+          <div class="card-header">
+            <h3>System Files</h3>
+            <span id="system-files-tag" class="tag">Checking...</span>
+          </div>
+          <div class="card-body">
+            <div class="stat-row">
+              <span class="label">prod.keys:</span>
+              <span id="sys-prod-keys" class="value">--</span>
+            </div>
+            <div class="stat-row">
+              <span class="label">title.keys:</span>
+              <span id="sys-title-keys" class="value">--</span>
+            </div>
+            <div class="stat-row">
+              <span class="label">Firmware:</span>
+              <span id="sys-firmware" class="value">--</span>
+            </div>
+            <div class="button-bar">
+              <button type="button" id="btn-add-keys" class="btn">Add Keys</button>
+              <button type="button" id="btn-add-firmware" class="btn">Add Firmware</button>
+              <button type="button" id="btn-clear-system" class="btn">Clear</button>
+            </div>
+            <input type="file" id="keys-input" accept=".zip,.keys" multiple hidden>
+            <input type="file" id="firmware-input" accept=".zip,.nca" multiple hidden>
+            <p id="sys-progress" class="sys-hint">Drop a keys or firmware .zip here. Files stay in this browser.</p>
+          </div>
+        </div>
+
         <!-- WASM Runtime Status Card -->
         <div class="card">
           <div class="card-header">
             <h3>WebAssembly Binary</h3>
-            <span id="binary-source-tag" class="tag">eden.wasm</span>
+            <span id="binary-source-tag" class="tag">runtime/eden.wasm</span>
           </div>
           <div class="card-body">
             <div class="stat-row">
@@ -99,11 +129,11 @@
             </div>
             <div class="stat-row">
               <span class="label">Memory Model:</span>
-              <span class="value">32-bit Wasm (SharedArrayBuffer)</span>
+              <span class="value">Memory64 Wasm (SharedArrayBuffer)</span>
             </div>
             <div class="stat-row">
               <span class="label">Architecture:</span>
-              <span class="value">ARM64 Dynarmic / Interpreter</span>
+              <span class="value">Dynarmic IR → Wasm JIT</span>
             </div>
             <div class="stat-row">
               <span class="label">Cross-Origin Isolation:</span>
@@ -124,12 +154,6 @@
               <button id="btn-step" class="btn" disabled>Step Frame</button>
               <button id="btn-reset" class="btn" disabled>Reset</button>
               <button id="btn-fullscreen" class="btn">Fullscreen</button>
-            </div>
-            <div class="speed-bar">
-              <label>Speed:</label>
-              <button class="btn speed-btn active" data-speed="1">1x</button>
-              <button class="btn speed-btn" data-speed="2">2x</button>
-              <button class="btn speed-btn" data-speed="4">4x</button>
             </div>
           </div>
         </div>
@@ -185,7 +209,7 @@
     </footer>
   </div>
 
-  <script src="eden.js"></script>
+  <script src="runtime/eden.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

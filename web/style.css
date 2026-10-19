@@ -506,3 +506,17 @@ kbd {
     border-radius: 12px;
   }
 }
+
+.card.dragover {
+  border-color: var(--neon-blue);
+}
+
+.stat-row .value.missing {
+  color: var(--neon-red);
+}
+
+.sys-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}

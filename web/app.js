@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+import {
+  importSystemFile,
+  getSystemFileStatus,
+  clearSystemFiles,
+  mountSystemFiles,
+} from './system-files.js';
+
 // DOM Elements
 const canvas = document.getElementById('canvas');
 const dropZone = document.getElementById('drop-zone');
@@ -18,7 +25,6 @@ const btnPause = document.getElementById('btn-pause');
 const btnStep = document.getElementById('btn-step');
 const btnReset = document.getElementById('btn-reset');
 const btnFullscreen = document.getElementById('btn-fullscreen');
-const speedBtns = document.querySelectorAll('.speed-btn');
 
 const titleName = document.getElementById('title-name');
 const titleSize = document.getElementById('title-size');
@@ -34,17 +40,6 @@ let isPaused = false;
 let animFrameId = null;
 let currentRomName = '';
 let currentRomData = null;
-let fastForwardMultiplier = 1;
-let frameCount = 0;
-let perfStatsPtr = null;
-
-// Audio context or canvas 2D context
-let ctx2d = null;
-try {
-  ctx2d = canvas.getContext('2d');
-} catch {
-  // If canvas is already WebGL or not available
-}
 
 // Check Cross-Origin Isolation
 function checkIsolation() {
@@ -59,271 +54,153 @@ function checkIsolation() {
 // Fetch WASM size metadata
 async function inspectWasmBinary() {
   try {
-    const res = await fetch('eden.wasm', { method: 'HEAD' });
-    if (res.ok) {
-      const len = res.headers.get('content-length');
-      if (len) {
-        const kb = (parseInt(len, 10) / 1024).toFixed(1);
-        wasmSize.textContent = `${kb} KB`;
-        return;
-      }
-    }
+    const res = await fetch('runtime/eden.wasm', { method: 'HEAD' });
+    const len = res.ok ? res.headers.get('content-length') : null;
+    wasmSize.textContent = len ? `${(parseInt(len, 10) / (1024 * 1024)).toFixed(1)} MB` : 'Unavailable';
   } catch (err) {
-    console.warn('Could not query eden.wasm HEAD:', err);
+    console.warn('Could not query runtime/eden.wasm:', err);
+    wasmSize.textContent = 'Unavailable';
   }
-  wasmSize.textContent = '14.2 KB';
 }
 
-// Initialize Emscripten Eden Module
-async function initWasmCore() {
+// Initialize Emscripten Eden Module. main() runs on a worker (PROXY_TO_PTHREAD); the exported
+// functions only queue requests and read status, so calling them never blocks this thread.
+let initPromise = null;
+function initWasmCore() {
+  initPromise ??= initWasmCoreOnce();
+  return initPromise;
+}
+
+async function initWasmCoreOnce() {
   checkIsolation();
   await inspectWasmBinary();
 
   if (typeof createEdenModule !== 'function') {
-    wasmBadge.className = 'status-badge checking';
-    wasmStatusText.textContent = 'Waiting for WASM...';
-    wasmState.textContent = 'Script loading';
+    wasmBadge.className = 'status-badge';
+    wasmStatusText.textContent = 'Runtime missing';
+    wasmState.textContent = 'runtime/eden.js not found (run npm run sync)';
+    initPromise = null;
+    return;
+  }
+  if (!window.crossOriginIsolated) {
+    wasmStatusText.textContent = 'Needs cross-origin isolation';
+    wasmState.textContent = 'Reload once the service worker is active';
+    initPromise = null;
     return;
   }
 
   try {
     wasmStatusText.textContent = 'Instantiating WASM...';
     edenModule = await createEdenModule({
-      canvas: canvas,
+      locateFile: (path) => 'runtime/' + path,
       print: (text) => console.log('[Eden]', text),
-      printErr: (text) => console.error('[Eden Error]', text),
+      printErr: (text) => console.error('[Eden]', text),
     });
-
-    const initResult = edenModule._eden_init();
-    if (initResult === 0) {
-      isInitialized = true;
-      wasmBadge.className = 'status-badge ready';
-      wasmStatusText.textContent = 'WASM Core Ready';
-      wasmState.textContent = 'Loaded & Initialized';
-      console.log('Eden WebAssembly emulator core initialized successfully.');
-    } else {
-      throw new Error(`eden_init returned code ${initResult}`);
-    }
+    isInitialized = true;
+    wasmBadge.className = 'status-badge ready';
+    wasmStatusText.textContent = 'WASM Core Ready';
+    wasmState.textContent = 'Loaded';
   } catch (err) {
     console.error('Failed to initialize Eden WebAssembly module:', err);
     wasmBadge.className = 'status-badge';
-    wasmBadge.style.borderColor = '#ff3c4a';
     wasmStatusText.textContent = 'WASM Init Failed';
     wasmState.textContent = 'Error: ' + err.message;
   }
 }
 
-// Render fallback canvas screen (when in null/software renderer mode)
-function renderFallbackScreen(frame, fpsVal, romTitle) {
-  if (!ctx2d) return;
+const EmuState = ['Idle', 'Booting', 'Running', 'Paused', 'Failed', 'Stopped'];
+let statusTimer = null;
 
-  const w = canvas.width;
-  const h = canvas.height;
-
-  // Background
-  ctx2d.fillStyle = '#0a0c10';
-  ctx2d.fillRect(0, 0, w, h);
-
-  // Center display area
-  const grad = ctx2d.createLinearGradient(0, 0, w, h);
-  grad.addColorStop(0, '#10141f');
-  grad.addColorStop(1, '#181e2e');
-  ctx2d.fillStyle = grad;
-  ctx2d.fillRect(40, 40, w - 80, h - 80);
-
-  // Border
-  ctx2d.strokeStyle = '#2b344a';
-  ctx2d.lineWidth = 4;
-  ctx2d.strokeRect(40, 40, w - 80, h - 80);
-
-  // Title
-  ctx2d.fillStyle = '#ffffff';
-  ctx2d.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx2d.textAlign = 'center';
-  ctx2d.fillText('EDEN NINTENDO SWITCH EMULATOR', w / 2, 130);
-
-  // Subtitle
-  ctx2d.fillStyle = '#00c3e3';
-  ctx2d.font = '22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx2d.fillText(`Active Title: ${romTitle || 'Homebrew Application'}`, w / 2, 180);
-
-  // Emulation Status Box
-  ctx2d.fillStyle = '#1e2538';
-  ctx2d.fillRect(w / 2 - 250, 230, 500, 200);
-  ctx2d.strokeStyle = '#3d4a6a';
-  ctx2d.lineWidth = 2;
-  ctx2d.strokeRect(w / 2 - 250, 230, 500, 200);
-
-  // Animated pulse / frame indicator
-  const pulse = Math.sin(frame * 0.1) * 0.5 + 0.5;
-  ctx2d.fillStyle = `rgba(0, 195, 227, ${0.4 + pulse * 0.6})`;
-  ctx2d.beginPath();
-  ctx2d.arc(w / 2 - 180, 280, 14, 0, Math.PI * 2);
-  ctx2d.fill();
-
-  ctx2d.fillStyle = '#ffffff';
-  ctx2d.font = 'bold 20px monospace';
-  ctx2d.textAlign = 'left';
-  ctx2d.fillText('GUEST CPU: RUNNING', w / 2 - 140, 287);
-
-  ctx2d.font = '18px monospace';
-  ctx2d.fillStyle = '#8c96a8';
-  ctx2d.fillText(`Frame Counter : ${frame}`, w / 2 - 180, 335);
-  ctx2d.fillText(`Emulated Speed: ${fpsVal.toFixed(1)} FPS (${fastForwardMultiplier}x)`, w / 2 - 180, 365);
-  ctx2d.fillText(`Backend Model : Dynarmic ARM64 / Null GFX`, w / 2 - 180, 395);
-
-  // Joy-Con status bar at bottom
-  ctx2d.fillStyle = '#2ecc71';
-  ctx2d.font = '16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  ctx2d.textAlign = 'center';
-  ctx2d.fillText('Joy-Con Handheld Mode Connected • Input Ready', w / 2, 620);
-}
-
-// Emulation frame stepping loop
-function frameStep() {
-  if (!isRunning || isPaused) return;
-
-  if (edenModule && isRomLoaded) {
-    for (let i = 0; i < fastForwardMultiplier; i++) {
-      edenModule._eden_step_frame();
-      frameCount++;
-    }
-
-    if (!perfStatsPtr) {
-      perfStatsPtr = edenModule._malloc(16);
-    }
-    edenModule._eden_get_perf_stats(perfStatsPtr, perfStatsPtr + 8);
-    const stats = new Float64Array(edenModule.HEAPU8.buffer, perfStatsPtr, 2);
-    const fps = stats[0] > 0 ? stats[0] : 60.0 * fastForwardMultiplier;
-    const frametime = stats[1] > 0 ? stats[1] : 16.66 / fastForwardMultiplier;
-
-    fpsCounter.textContent = `${fps.toFixed(1)} FPS`;
-    frametimeCounter.textContent = `${frametime.toFixed(2)} ms`;
-
-    renderFallbackScreen(frameCount, fps, currentRomName);
+function pollStatus() {
+  if (!edenModule) return;
+  const state = edenModule._eden_get_state();
+  const name = EmuState[state] || `State ${state}`;
+  wasmState.textContent = name;
+  isRunning = state === 2;
+  isPaused = state === 3;
+  pauseOverlay.style.display = isPaused ? 'flex' : 'none';
+  btnPlay.disabled = !isPaused;
+  btnPause.disabled = !isRunning;
+  btnReset.disabled = !(isRunning || isPaused);
+  btnStep.disabled = true;
+  if (state === 4) {
+    wasmStatusText.textContent = `Boot failed (load result ${edenModule._eden_get_load_result()})`;
+  } else if (state >= 1 && state <= 3) {
+    wasmStatusText.textContent = `${name}: ${currentRomName}`;
   }
-
-  animFrameId = requestAnimationFrame(frameStep);
+  const finite = (value) => (Number.isFinite(value) ? value : 0);
+  fpsCounter.textContent = `${finite(edenModule._eden_get_game_fps()).toFixed(1)} FPS`;
+  frametimeCounter.textContent = `${finite(edenModule._eden_get_frametime()).toFixed(2)} ms (${(finite(edenModule._eden_get_emulation_speed()) * 100).toFixed(0)}%)`;
 }
 
 function startLoop() {
-  if (!isRomLoaded) return;
-  isRunning = true;
-  isPaused = false;
-  pauseOverlay.style.display = 'none';
-  btnPlay.disabled = true;
-  btnPause.disabled = false;
-  btnStep.disabled = false;
-  btnReset.disabled = false;
-
-  cancelAnimationFrame(animFrameId);
-  animFrameId = requestAnimationFrame(frameStep);
+  edenModule?._eden_resume();
 }
 
 function pauseLoop() {
-  if (!isRunning) return;
-  isPaused = true;
-  pauseOverlay.style.display = 'flex';
-  btnPlay.disabled = false;
-  btnPause.disabled = true;
-  cancelAnimationFrame(animFrameId);
+  edenModule?._eden_pause();
 }
 
-function stepOneFrame() {
-  if (!isRomLoaded || !edenModule) return;
-  pauseLoop();
-  edenModule._eden_step_frame();
-  frameCount++;
-
-  if (!perfStatsPtr) {
-    perfStatsPtr = edenModule._malloc(16);
-  }
-  edenModule._eden_get_perf_stats(perfStatsPtr, perfStatsPtr + 8);
-  const stats = new Float64Array(edenModule.HEAPU8.buffer, perfStatsPtr, 2);
-  const fps = stats[0] > 0 ? stats[0] : 60.0;
-  const frametime = stats[1] > 0 ? stats[1] : 16.66;
-
-  fpsCounter.textContent = `${fps.toFixed(1)} FPS`;
-  frametimeCounter.textContent = `${frametime.toFixed(2)} ms`;
-
-  renderFallbackScreen(frameCount, fps, currentRomName);
-}
+function stepOneFrame() {}
 
 function resetEmulation() {
-  if (!isRomLoaded || !edenModule) return;
-  pauseLoop();
-  frameCount = 0;
-  if (currentRomData && currentRomName) {
-    const vfsPath = '/' + currentRomName;
-    edenModule.FS.writeFile(vfsPath, currentRomData);
-    edenModule.ccall('eden_load_rom', 'number', ['string'], [vfsPath]);
-  }
-  startLoop();
+  // The core does not support rebooting in place; reload the page to start over.
+  edenModule?._eden_shutdown();
+  location.reload();
 }
 
 // Handle dropped or selected ROM file
 async function handleFile(file) {
   if (!file) return;
 
-  const validExtensions = ['.nsp', '.xci', '.nro'];
   const lowerName = file.name.toLowerCase();
-  const isValid = validExtensions.some(ext => lowerName.endsWith(ext));
-
-  if (!isValid) {
-    alert(`Unsupported ROM format "${file.name}". Please load a decrypted .nsp, .xci, or homebrew .nro file.`);
+  if (['.zip', '.keys'].some(ext => lowerName.endsWith(ext))) {
+    await importSystemFiles([file]);
     return;
   }
 
+  const validExtensions = ['.nsp', '.xci', '.nro', '.nca', '.nso'];
+  if (!validExtensions.some(ext => lowerName.endsWith(ext))) {
+    alert(`Unsupported ROM format "${file.name}".`);
+    return;
+  }
+  if (isRomLoaded) {
+    alert('A game is already running. Reload the page to start another one.');
+    return;
+  }
+
+  await initWasmCore();
   if (!isInitialized) {
-    await initWasmCore();
-    if (!isInitialized) {
-      alert('Eden WebAssembly core is not ready yet. Please wait for the WASM runtime to initialize.');
-      return;
-    }
+    alert('The Eden WebAssembly core is not ready.');
+    return;
   }
 
   currentRomName = file.name;
   titleName.textContent = file.name;
   titleSize.textContent = `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
 
-  wasmStatusText.textContent = `Mounting ${file.name}...`;
-
   try {
-    const arrayBuffer = await file.arrayBuffer();
-    currentRomData = new Uint8Array(arrayBuffer);
+    wasmStatusText.textContent = 'Mounting keys & firmware...';
+    const mounted = await mountSystemFiles(edenModule.FS);
+    console.log(`Mounted ${mounted} system files into the Eden data directory.`);
 
-    const vfsPath = '/' + file.name;
-    edenModule.FS.writeFile(vfsPath, currentRomData);
+    wasmStatusText.textContent = `Reading ${file.name}...`;
+    const path = '/roms/' + file.name;
+    edenModule.FS.mkdirTree('/roms');
+    edenModule.FS.writeFile(path, new Uint8Array(await file.arrayBuffer()));
 
-    const loadResult = edenModule.ccall('eden_load_rom', 'number', ['string'], [vfsPath]);
-    if (loadResult !== 0) {
-      throw new Error(`eden_load_rom returned code ${loadResult}`);
+    if (edenModule.ccall('eden_boot', 'number', ['string'], [path]) !== 0) {
+      throw new Error('eden_boot rejected the request');
     }
-
     isRomLoaded = true;
-    wasmStatusText.textContent = 'Running: ' + file.name;
     dropZone.style.display = 'none';
-
-    startLoop();
+    statusTimer ??= setInterval(pollStatus, 500);
   } catch (err) {
     console.error('Failed to load ROM:', err);
     alert(`Failed to load ROM: ${err.message}`);
     wasmStatusText.textContent = 'ROM Load Failed';
   }
 }
-
-// Speed selection
-speedBtns.forEach(btn => {
-  btn.addEventListener('click', () => {
-    speedBtns.forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const factor = parseInt(btn.dataset.speed, 10) || 1;
-    fastForwardMultiplier = factor;
-    if (edenModule && isInitialized) {
-      edenModule._eden_set_fast_forward(factor);
-    }
-  });
-});
 
 // UI Event Listeners
 browseBtn?.addEventListener('click', (e) => {
@@ -412,12 +289,96 @@ document.querySelectorAll('.abxy-btn, .dpad-btn, .jc-button, .jc-stick').forEach
   btn.addEventListener('touchend', () => btn.classList.remove('pressed'));
 });
 
-// Initial boot
-window.addEventListener('DOMContentLoaded', () => {
-  initWasmCore();
+// Keys & firmware widget
+const systemCard = document.getElementById('system-files-card');
+const systemTag = document.getElementById('system-files-tag');
+const sysProdKeys = document.getElementById('sys-prod-keys');
+const sysTitleKeys = document.getElementById('sys-title-keys');
+const sysFirmware = document.getElementById('sys-firmware');
+const sysProgress = document.getElementById('sys-progress');
+const keysInput = document.getElementById('keys-input');
+const firmwareInput = document.getElementById('firmware-input');
+const systemButtons = ['btn-add-keys', 'btn-add-firmware', 'btn-clear-system']
+  .map(id => document.getElementById(id));
+
+function setPresence(elem, present, text) {
+  elem.textContent = text;
+  elem.classList.toggle('highlight', present);
+  elem.classList.toggle('missing', !present);
+}
+
+async function refreshSystemStatus() {
+  try {
+    const status = await getSystemFileStatus();
+    setPresence(sysProdKeys, status.prodKeys, status.prodKeys ? 'Installed' : 'Missing');
+    setPresence(sysTitleKeys, status.titleKeys, status.titleKeys ? 'Installed' : 'Optional');
+    sysTitleKeys.classList.remove('missing');
+    const mb = (status.firmwareBytes / (1024 * 1024)).toFixed(0);
+    setPresence(sysFirmware, status.firmwareCount > 0,
+      status.firmwareCount > 0 ? `${status.firmwareCount} NCAs, ${mb} MB` : 'Missing');
+    systemTag.textContent = status.prodKeys ? 'Ready' : 'Keys required';
+    if (status.firmwareSource) {
+      sysFirmware.title = status.firmwareSource;
+    }
+  } catch (err) {
+    systemTag.textContent = 'Unavailable';
+    sysProgress.textContent = `IndexedDB unavailable: ${err.message}`;
+  }
+}
+
+async function importSystemFiles(files) {
+  systemButtons.forEach(btn => { btn.disabled = true; });
+  try {
+    for (const file of files) {
+      sysProgress.textContent = `Importing ${file.name}...`;
+      const result = await importSystemFile(file, (copied, total) => {
+        sysProgress.textContent = `Importing ${file.name}: ${copied}/${total} NCAs`;
+      });
+      const parts = [];
+      if (result.keys.length) parts.push(result.keys.join(', '));
+      if (result.firmwareCount) parts.push(`${result.firmwareCount} firmware NCAs`);
+      sysProgress.textContent = `Imported ${parts.join(' and ')} from ${file.name}.`;
+    }
+    if (isInitialized) {
+      sysProgress.textContent += ' Reload the page to apply.';
+    }
+  } catch (err) {
+    console.error('System file import failed:', err);
+    sysProgress.textContent = `Import failed: ${err.message}`;
+  } finally {
+    systemButtons.forEach(btn => { btn.disabled = false; });
+    await refreshSystemStatus();
+  }
+}
+
+document.getElementById('btn-add-keys').addEventListener('click', () => keysInput.click());
+document.getElementById('btn-add-firmware').addEventListener('click', () => firmwareInput.click());
+document.getElementById('btn-clear-system').addEventListener('click', async () => {
+  if (!confirm('Remove stored keys and firmware from this browser?')) return;
+  await clearSystemFiles();
+  sysProgress.textContent = 'Cleared stored keys and firmware.';
+  await refreshSystemStatus();
 });
 
-// If DOMContentLoaded already fired:
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-  initWasmCore();
+for (const input of [keysInput, firmwareInput]) {
+  input.addEventListener('change', () => {
+    importSystemFiles([...input.files]);
+    input.value = '';
+  });
 }
+
+systemCard.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  systemCard.classList.add('dragover');
+});
+systemCard.addEventListener('dragleave', () => systemCard.classList.remove('dragover'));
+systemCard.addEventListener('drop', (e) => {
+  e.preventDefault();
+  systemCard.classList.remove('dragover');
+  importSystemFiles([...e.dataTransfer.files]);
+});
+
+refreshSystemStatus();
+
+// Initial boot (module scripts are deferred, so the DOM is already parsed)
+initWasmCore();
