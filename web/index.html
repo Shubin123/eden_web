@@ -2,46 +2,190 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Eden Web (WASM)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Eden Web — Nintendo Switch Emulator</title>
+  <!-- GitHub Pages Cross-Origin Isolation (enables SharedArrayBuffer & pthreads) -->
+  <script src="coi-serviceworker.js"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="app-container">
     <header class="app-header">
-      <div class="logo">
-        <span class="icon">⚡</span>
+      <div class="header-brand">
+        <div class="switch-logo">
+          <span class="joycon-left"></span>
+          <span class="joycon-right"></span>
+        </div>
         <h1>Eden Web</h1>
+        <span class="badge">Switch WebAssembly Port</span>
       </div>
-      <div class="header-status" id="header-status">Ready</div>
+      <div class="header-meta">
+        <div id="wasm-badge" class="status-badge checking">
+          <span class="indicator"></span>
+          <span id="wasm-status-text">Loading WASM...</span>
+        </div>
+        <a href="https://github.com/Shubin123/eden_web" class="gh-link" target="_blank" rel="noopener">GitHub</a>
+      </div>
     </header>
 
-    <main class="main-content">
-      <div class="viewport-wrapper">
-        <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
-        <div id="drop-zone" class="drop-zone">
-          <div class="drop-prompt">
-            <span class="upload-icon">📁</span>
-            <h2>Drop Nintendo Switch ROM (.nsp, .xci, .nro) here</h2>
-            <p>or click to select file</p>
-            <input type="file" id="file-input" accept=".nsp,.xci,.nro" style="display: none;">
+    <main class="main-layout">
+      <!-- Switch Console Simulation -->
+      <section class="console-viewport-container">
+        <div class="switch-device">
+          <!-- Left Joy-Con (Neon Blue) -->
+          <div class="joycon neon-blue">
+            <div class="jc-button btn-minus">-</div>
+            <div class="jc-stick stick-left"></div>
+            <div class="jc-dpad">
+              <div class="dpad-btn up">▲</div>
+              <div class="dpad-btn left">◀</div>
+              <div class="dpad-btn right">▶</div>
+              <div class="dpad-btn down">▼</div>
+            </div>
+            <div class="jc-button btn-capture"></div>
+          </div>
+
+          <!-- Central Display Screen -->
+          <div class="screen-frame">
+            <canvas id="canvas" width="1280" height="720" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+            
+            <div id="drop-zone" class="drop-zone">
+              <div class="drop-prompt">
+                <div class="upload-art">⚡</div>
+                <h2>Drop Nintendo Switch ROM</h2>
+                <p>Supports decrypted <strong>.nsp</strong>, <strong>.xci</strong>, and homebrew <strong>.nro</strong></p>
+                <button type="button" id="browse-btn" class="btn primary-btn">Select ROM File</button>
+                <input type="file" id="file-input" accept=".nsp,.xci,.nro" style="display: none;">
+              </div>
+            </div>
+
+            <div id="pause-overlay" class="pause-overlay" style="display: none;">
+              <span class="pause-icon">⏸</span>
+              <span>PAUSED</span>
+            </div>
+          </div>
+
+          <!-- Right Joy-Con (Neon Red) -->
+          <div class="joycon neon-red">
+            <div class="jc-button btn-plus">+</div>
+            <div class="jc-abxy">
+              <div class="abxy-btn btn-x" data-key="KeyX">X</div>
+              <div class="abxy-btn btn-y" data-key="KeyY">Y</div>
+              <div class="abxy-btn btn-a" data-key="KeyA">A</div>
+              <div class="abxy-btn btn-b" data-key="KeyB">B</div>
+            </div>
+            <div class="jc-stick stick-right"></div>
+            <div class="jc-button btn-home">⌂</div>
           </div>
         </div>
-      </div>
+      </section>
+
+      <!-- Dashboard Cards -->
+      <section class="dashboard-grid">
+        <!-- WASM Runtime Status Card -->
+        <div class="card">
+          <div class="card-header">
+            <h3>WebAssembly Binary</h3>
+            <span id="binary-source-tag" class="tag">eden.wasm</span>
+          </div>
+          <div class="card-body">
+            <div class="stat-row">
+              <span class="label">Binary Status:</span>
+              <span id="wasm-state" class="value highlight">Loaded & Verified</span>
+            </div>
+            <div class="stat-row">
+              <span class="label">Binary Size:</span>
+              <span id="wasm-size" class="value">Inspecting...</span>
+            </div>
+            <div class="stat-row">
+              <span class="label">Memory Model:</span>
+              <span class="value">32-bit Wasm (SharedArrayBuffer)</span>
+            </div>
+            <div class="stat-row">
+              <span class="label">Architecture:</span>
+              <span class="value">ARM64 Dynarmic / Interpreter</span>
+            </div>
+            <div class="stat-row">
+              <span class="label">Cross-Origin Isolation:</span>
+              <span id="coop-status" class="value">Active (COOP/COEP)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Emulation Controls Card -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Emulation Controls</h3>
+          </div>
+          <div class="card-body">
+            <div class="button-bar">
+              <button id="btn-play" class="btn" disabled>Play</button>
+              <button id="btn-pause" class="btn" disabled>Pause</button>
+              <button id="btn-step" class="btn" disabled>Step Frame</button>
+              <button id="btn-reset" class="btn" disabled>Reset</button>
+              <button id="btn-fullscreen" class="btn">Fullscreen</button>
+            </div>
+            <div class="speed-bar">
+              <label>Speed:</label>
+              <button class="btn speed-btn active" data-speed="1">1x</button>
+              <button class="btn speed-btn" data-speed="2">2x</button>
+              <button class="btn speed-btn" data-speed="4">4x</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROM & Execution Info Card -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Guest Info</h3>
+          </div>
+          <div class="card-body">
+            <div class="stat-row">
+              <span class="label">Loaded Title:</span>
+              <span id="title-name" class="value">None</span>
+            </div>
+            <div class="stat-row">
+              <span class="label">File Size:</span>
+              <span id="title-size" class="value">--</span>
+            </div>
+            <div class="stat-row">
+              <span class="label">Game FPS:</span>
+              <span id="fps-counter" class="value highlight">--</span>
+            </div>
+            <div class="stat-row">
+              <span class="label">Frametime:</span>
+              <span id="frametime-counter" class="value">-- ms</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Joy-Con / Keyboard Mapping Card -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Keyboard Controls</h3>
+          </div>
+          <div class="card-body controls-legend">
+            <div class="legend-col">
+              <div><kbd>A</kbd> <kbd>S</kbd> <kbd>Z</kbd> <kbd>X</kbd> : A, B, X, Y</div>
+              <div><kbd>Arrows</kbd> : D-Pad</div>
+            </div>
+            <div class="legend-col">
+              <div><kbd>Q</kbd> / <kbd>E</kbd> : L / R</div>
+              <div><kbd>1</kbd> / <kbd>3</kbd> : ZL / ZR</div>
+              <div><kbd>Enter</kbd> / <kbd>Backspace</kbd> : + / -</div>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
 
-    <footer class="controls-bar">
-      <div class="control-group">
-        <button id="btn-fullscreen" class="btn">Fullscreen</button>
-        <button id="btn-pause" class="btn" disabled>Pause</button>
-        <button id="btn-reset" class="btn" disabled>Reset</button>
-      </div>
-      <div class="status-group">
-        <span id="fps-counter">FPS: --</span>
-        <span id="backend-status">Status: Standby</span>
-      </div>
+    <footer class="app-footer">
+      <span>Eden WebAssembly Port &copy; 2026</span>
+      <span>Engine: <a href="https://github.com/Shubin123/eden_emscripten" target="_blank" rel="noopener">eden_emscripten</a></span>
     </footer>
   </div>
+
+  <script src="eden.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

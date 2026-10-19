@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node scripts/server.mjs",
     "sync": "node scripts/sync-runtime.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node tests/web_artifact_smoke.cjs"
   },
   "devDependencies": {
     "puppeteer-core": "^23.11.1"
