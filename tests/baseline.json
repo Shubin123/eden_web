@@ -1,0 +1,7 @@
+{
+  "_measured": "Captain Toad, Chrome 155, M-series Mac, 2026-10-19: core ready 0.4 s, first frame 14 s, peak 60 fps, ~22 fps in-game at 90-120 s",
+  "coreReadyMs": 15000,
+  "firstFrameS": 45,
+  "minPeakFps": 50,
+  "minSustainedFps": 12
+}

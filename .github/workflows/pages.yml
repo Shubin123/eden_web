@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "web/**"
+      - "tests/web_artifact_smoke.cjs"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -26,6 +27,27 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # The runtime is built locally in eden_emscripten and published with `npm run publish-runtime`.
+      - name: Download runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download runtime --repo "$GITHUB_REPOSITORY" --dir web/runtime --pattern 'eden.*' --pattern runtime.json
+      - name: Verify runtime
+        run: |
+          node -e '
+            const { createHash } = require("node:crypto");
+            const fs = require("node:fs");
+            const manifest = JSON.parse(fs.readFileSync("web/runtime/runtime.json"));
+            for (const [file, { sha256 }] of Object.entries(manifest.files)) {
+              const actual = createHash("sha256").update(fs.readFileSync("web/runtime/" + file)).digest("hex");
+              if (actual !== sha256) throw new Error(file + " checksum mismatch");
+            }
+            console.log("Runtime " + manifest.engineRevision + " verified");'
+          node tests/web_artifact_smoke.cjs
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload web bundle

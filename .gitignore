@@ -13,3 +13,4 @@ dist/
 web/runtime/*.wasm
 web/runtime/*.js
 !web/runtime/.gitkeep
+web/runtime/*.json

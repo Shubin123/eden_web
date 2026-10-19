@@ -10,9 +10,8 @@ A WebAssembly frontend and test harness for the Eden Nintendo Switch emulator po
 - **`web/index.html`**: Switch console simulation UI with Neon Joy-Cons, canvas screen, drop zone, WASM binary status card, and keyboard controls.
 - **`web/system-files.js`**: Keys & firmware importer. Unpacks `prod.keys`/`title.keys` and firmware `.zip` dumps in the browser, persists them in IndexedDB, and mounts them into Eden's data directory before `eden_init`.
 - **`web/app.js`**: Frontend runtime driver managing the WebAssembly lifecycle, mounting ROMs into the virtual filesystem (MEMFS), and stepping emulation frames.
-- **`web/eden.js` & `web/eden.wasm`**: Compiled WebAssembly binary artifacts providing the C API exports (`eden_init`, `eden_load_rom`, `eden_step_frame`, etc.).
 - **`web/coi-serviceworker.js`**: Cross-Origin Isolation Service Worker enabling `SharedArrayBuffer` and multi-threading on GitHub Pages.
-- **`web/runtime/`**: Synchronized runtime copies of WebAssembly binaries.
+- **`web/runtime/`**: The Eden WebAssembly runtime (`eden.js`, `eden.wasm`) built by `eden_emscripten`. Not committed; synced locally and published as assets of the `runtime` release for Pages.
 - **`scripts/server.mjs`**: Local HTTP server with COOP/COEP headers.
 - **`.github/workflows/pages.yml`**: GitHub Actions deployment workflow deploying the `web/` directory to GitHub Pages.
 
@@ -28,12 +27,23 @@ A WebAssembly frontend and test harness for the Eden Nintendo Switch emulator po
 3. In the **System Files** card, add your `prod.keys` (or a keys `.zip`) and a firmware `.zip` dumped from your own console.
 4. Drop a decrypted Nintendo Switch ROM (`.nsp`, `.xci`) or homebrew executable (`.nro`).
 
-### Smoke Tests
+### Tests
 
-To verify that the WebAssembly binary artifacts and exports are intact:
+Check that the runtime in `web/runtime` is a threaded Memory64 build with the C API the frontend uses:
 ```bash
 npm test
 ```
+
+Run the browser end-to-end and regression test (Chrome, WebGPU). Without inputs it checks that the page loads,
+is cross-origin isolated, and starts the core. With your own keys, firmware and game it imports them through the
+UI, boots the game and compares boot time and frame rate with `tests/baseline.json`:
+```bash
+npm run test:e2e                                        # local build, COOP/COEP headers
+npm run test:e2e -- --static                            # local build served like GitHub Pages
+npm run test:e2e -- --url https://shubin123.github.io/eden_web/
+EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip EDEN_ROM=game.nsp npm run test:e2e -- --seconds 120
+```
+Reports and screenshots are written to `artifacts/`.
 
 ## Controls
 
@@ -52,4 +62,9 @@ npm test
 To sync freshly compiled WebAssembly artifacts from `eden_emscripten`:
 ```bash
 npm run sync
+```
+
+To deploy them to GitHub Pages, upload them to the `runtime` release and start the Pages workflow:
+```bash
+npm run publish-runtime -- --deploy
 ```

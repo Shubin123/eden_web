@@ -16,14 +16,15 @@ const mime = {
   '.png': 'image/png'
 };
 
-export function createServer() {
+// `isolation: false` omits the COOP/COEP headers, like GitHub Pages, so the COI service worker is used.
+export function createServer({ isolation = true } = {}) {
   return http.createServer(async (request, response) => {
-    const headers = {
+    const headers = isolation ? {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
       'Cross-Origin-Resource-Policy': 'same-origin',
       'Cache-Control': 'no-cache'
-    };
+    } : { 'Cache-Control': 'no-cache' };
     try {
       if (!['GET', 'HEAD'].includes(request.method)) {
         response.writeHead(405, headers);
