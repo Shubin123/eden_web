@@ -45,6 +45,7 @@ if (!url) {
   url = `http://127.0.0.1:${server.address().port}/`;
 }
 
+const consoleLog = [];
 const report = { url, startedAt: new Date().toISOString(), bootGame, checks: [], timeline: [], frames: [], errors: [] };
 const failures = [];
 function check(name, ok, detail) {
@@ -73,6 +74,7 @@ try {
   page.on('pageerror', error => report.errors.push(`pageerror: ${error.message}`));
   page.on('console', message => {
     const text = message.text();
+    consoleLog.push(text);
     if (/<Critical>|Aborted\(|RuntimeError/.test(text)) {
       criticalLogs++;
       if (report.errors.length < 50) report.errors.push(text.slice(0, 400));
@@ -179,6 +181,7 @@ try {
   report.failures = failures;
   const reportPath = path.join(artifacts, `e2e-${stamp}.json`);
   await writeFile(reportPath, JSON.stringify(report, null, 2));
+  await writeFile(path.join(artifacts, `e2e-${stamp}-console.log`), consoleLog.join('\n') + '\n');
   console.log(`${failures.length ? 'FAILED' : 'PASSED'}: ${report.checks.length - failures.length}/${report.checks.length} checks, report ${path.relative(root, reportPath)}`);
 }
 
