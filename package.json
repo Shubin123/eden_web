@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node scripts/server.mjs",
     "sync": "node scripts/sync-runtime.mjs",
-    "test": "node tests/web_artifact_smoke.cjs",
+    "test": "node tests/web_artifact_smoke.cjs && node tests/zip_reader.mjs",
     "test:e2e": "node tests/e2e.mjs",
     "publish-runtime": "node scripts/publish-runtime.mjs"
   },

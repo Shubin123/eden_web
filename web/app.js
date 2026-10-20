@@ -5,6 +5,7 @@ import {
   getSystemFileStatus,
   clearSystemFiles,
   mountSystemFiles,
+  readZipEntries,
 } from './system-files.js';
 import { setupInput } from './input.js';
 
@@ -394,18 +395,41 @@ function resetEmulation() {
   location.reload();
 }
 
-// Handle dropped or selected ROM file
+const ROM_EXTENSIONS = ['.nsp', '.xci', '.nro', '.nca', '.nso'];
+// .nca is left out: a ZIP of NCAs is a firmware dump.
+const ZIPPED_ROM_EXTENSIONS = ['.nsp', '.xci', '.nro', '.nso'];
+
+const hasExtension = (name, extensions) => extensions.some(ext => name.toLowerCase().endsWith(ext));
+
+// Handle dropped or selected ROM file, or a ZIP holding one
 async function handleFile(file) {
   if (!file) return;
 
+  let rom = { name: file.name, size: file.size, stream: async () => file.stream() };
   const lowerName = file.name.toLowerCase();
-  if (['.zip', '.keys'].some(ext => lowerName.endsWith(ext))) {
+  if (lowerName.endsWith('.keys')) {
     await importSystemFiles([file]);
     return;
   }
-
-  const validExtensions = ['.nsp', '.xci', '.nro', '.nca', '.nso'];
-  if (!validExtensions.some(ext => lowerName.endsWith(ext))) {
+  if (lowerName.endsWith('.zip')) {
+    let entries;
+    try {
+      entries = await readZipEntries(file);
+    } catch (err) {
+      setRomStatus(`Cannot open ${file.name}: ${err.message}`);
+      alert(`Cannot open ${file.name}: ${err.message}`);
+      return;
+    }
+    const roms = entries.filter(e => hasExtension(e.name, ZIPPED_ROM_EXTENSIONS));
+    if (roms.length === 0) {
+      await importSystemFiles([file]);
+      return;
+    }
+    if (roms.length > 1) {
+      log(`${file.name} holds ${roms.length} ROMs; loading ${roms[0].name}.`, 'ui');
+    }
+    rom = { ...roms[0], name: roms[0].name.split('/').pop() };
+  } else if (!hasExtension(lowerName, ROM_EXTENSIONS)) {
     setRomStatus(`Unsupported ROM format "${file.name}".`);
     alert(`Unsupported ROM format "${file.name}".`);
     return;
@@ -426,32 +450,39 @@ async function handleFile(file) {
     return;
   }
 
-  currentRomName = file.name;
-  titleName.textContent = file.name;
-  fileLabel.textContent = file.name;
-  titleSize.textContent = `${(file.size / (1024 * 1024)).toFixed(2)} MB`;
+  currentRomName = rom.name;
+  titleName.textContent = rom.name;
+  fileLabel.textContent = rom.name;
+  titleSize.textContent = `${(rom.size / (1024 * 1024)).toFixed(2)} MB`;
 
-  loader.begin(file.size);
+  loader.begin(rom.size);
   try {
     wasmStatusText.textContent = 'Mounting keys & firmware...';
     setRomStatus('Mounting keys & firmware...');
     const mounted = await mountSystemFiles(edenModule.FS);
     log(`Mounted ${mounted} system files into the Eden data directory.`, 'ui');
 
-    wasmStatusText.textContent = `Reading ${file.name}...`;
-    setRomStatus(`Reading ${file.name}...`);
-    const path = '/roms/' + file.name;
+    wasmStatusText.textContent = `Reading ${rom.name}...`;
+    setRomStatus(`Reading ${rom.name}...`);
+    const path = '/roms/' + rom.name;
     edenModule.FS.mkdirTree('/roms');
     loader.setPhase('copy');
     const stream = edenModule.FS.open(path, 'w');
+    const reader = (await rom.stream()).getReader();
     try {
-      const CHUNK = 32 * 1024 * 1024;
-      for (let pos = 0; pos < file.size; pos += CHUNK) {
-        const chunk = new Uint8Array(await file.slice(pos, pos + CHUNK).arrayBuffer());
-        edenModule.FS.write(stream, chunk, 0, chunk.length, pos);
-        loader.bytes = pos + chunk.length;
+      let pos = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        edenModule.FS.write(stream, value, 0, value.length, pos);
+        pos += value.length;
+        loader.bytes = pos;
+      }
+      if (pos !== rom.size) {
+        throw new Error(`${rom.name} is truncated (${pos} of ${rom.size} bytes)`);
       }
     } finally {
+      reader.releaseLock();
       edenModule.FS.close(stream);
     }
     loader.setPhase('boot');
@@ -462,7 +493,7 @@ async function handleFile(file) {
     isRomLoaded = true;
     dropZone.style.display = 'none';
     fileInput.disabled = true;
-    setRomStatus(`Booting ${file.name}. Reload the page to load a different game.`);
+    setRomStatus(`Booting ${rom.name}. Reload the page to load a different game.`);
     statusTimer ??= setInterval(pollStatus, 500);
   } catch (err) {
     console.error('Failed to load ROM:', err);

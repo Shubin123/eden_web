@@ -70,9 +70,11 @@ async function putAll(records) {
 
 // Minimal ZIP reader: walks the central directory and returns lazily-sliced entries. Firmware
 // dumps are usually stored uncompressed, so those entries are plain Blob slices of the source.
-async function readZipEntries(file) {
+// ZIP64 is supported since XCI dumps commonly exceed 4 GiB.
+export async function readZipEntries(file) {
   const tailSize = Math.min(file.size, 0x10000 + 22);
-  const tail = new DataView(await file.slice(file.size - tailSize).arrayBuffer());
+  const tailStart = file.size - tailSize;
+  const tail = new DataView(await file.slice(tailStart).arrayBuffer());
   let eocd = -1;
   for (let i = tail.byteLength - 22; i >= 0; i--) {
     if (tail.getUint32(i, true) === 0x06054b50) {
@@ -83,11 +85,18 @@ async function readZipEntries(file) {
   if (eocd < 0) {
     throw new Error(`${file.name} is not a ZIP archive`);
   }
-  const count = tail.getUint16(eocd + 10, true);
-  const cdSize = tail.getUint32(eocd + 12, true);
-  const cdOffset = tail.getUint32(eocd + 16, true);
-  if (cdOffset === 0xffffffff || count === 0xffff) {
-    throw new Error(`${file.name} uses ZIP64, which is not supported`);
+  let count = tail.getUint16(eocd + 10, true);
+  let cdSize = tail.getUint32(eocd + 12, true);
+  let cdOffset = tail.getUint32(eocd + 16, true);
+  if (eocd >= 20 && tail.getUint32(eocd - 20, true) === 0x07064b50) {
+    const eocd64Offset = Number(tail.getBigUint64(eocd - 12, true));
+    const eocd64 = new DataView(await file.slice(eocd64Offset, eocd64Offset + 56).arrayBuffer());
+    if (eocd64.getUint32(0, true) !== 0x06064b50) {
+      throw new Error(`${file.name} has a corrupt ZIP64 directory`);
+    }
+    count = Number(eocd64.getBigUint64(32, true));
+    cdSize = Number(eocd64.getBigUint64(40, true));
+    cdOffset = Number(eocd64.getBigUint64(48, true));
   }
 
   const cd = new DataView(await file.slice(cdOffset, cdOffset + cdSize).arrayBuffer());
@@ -99,13 +108,28 @@ async function readZipEntries(file) {
       throw new Error(`${file.name} has a corrupt central directory`);
     }
     const method = cd.getUint16(p + 10, true);
-    const compressedSize = cd.getUint32(p + 20, true);
-    const size = cd.getUint32(p + 24, true);
+    let compressedSize = cd.getUint32(p + 20, true);
+    let size = cd.getUint32(p + 24, true);
     const nameLength = cd.getUint16(p + 28, true);
     const extraLength = cd.getUint16(p + 30, true);
     const commentLength = cd.getUint16(p + 32, true);
-    const localOffset = cd.getUint32(p + 42, true);
+    let localOffset = cd.getUint32(p + 42, true);
     const name = decoder.decode(new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nameLength));
+
+    // The ZIP64 extra field holds, in order, only the values whose header field is saturated.
+    for (let x = p + 46 + nameLength; x + 4 <= p + 46 + nameLength + extraLength;) {
+      const id = cd.getUint16(x, true);
+      const len = cd.getUint16(x + 2, true);
+      if (id === 0x0001) {
+        let q = x + 4;
+        const next = () => { const v = Number(cd.getBigUint64(q, true)); q += 8; return v; };
+        if (size === 0xffffffff) size = next();
+        if (compressedSize === 0xffffffff) compressedSize = next();
+        if (localOffset === 0xffffffff) localOffset = next();
+      }
+      x += 4 + len;
+    }
+
     p += 46 + nameLength + extraLength + commentLength;
     if (name.endsWith('/')) {
       continue;
@@ -113,24 +137,32 @@ async function readZipEntries(file) {
     entries.push({ name, method, compressedSize, size, localOffset });
   }
 
-  return entries.map(entry => ({
-    name: entry.name,
-    size: entry.size,
-    async blob() {
+  return entries.map(entry => {
+    async function raw() {
       const header = new DataView(
         await file.slice(entry.localOffset, entry.localOffset + 30).arrayBuffer());
       const start = entry.localOffset + 30 + header.getUint16(26, true) + header.getUint16(28, true);
-      const raw = file.slice(start, start + entry.compressedSize);
+      return file.slice(start, start + entry.compressedSize);
+    }
+    async function stream() {
+      const data = await raw();
       if (entry.method === 0) {
-        return raw;
+        return data.stream();
       }
       if (entry.method === 8) {
-        const stream = raw.stream().pipeThrough(new DecompressionStream('deflate-raw'));
-        return new Response(stream).blob();
+        return data.stream().pipeThrough(new DecompressionStream('deflate-raw'));
       }
       throw new Error(`${entry.name}: unsupported ZIP compression method ${entry.method}`);
-    },
-  }));
+    }
+    return {
+      name: entry.name,
+      size: entry.size,
+      stream,
+      async blob() {
+        return entry.method === 0 ? raw() : new Response(await stream()).blob();
+      },
+    };
+  });
 }
 
 function baseName(name) {
