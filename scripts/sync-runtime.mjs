@@ -13,8 +13,8 @@ try {
   const files = await readdir(source);
   let count = 0;
   for (const file of files) {
-    // Only the browser runtime; the headless runner and test binaries also live in bin/.
-    if (/^eden\.(wasm|js|data)$/.test(file)) {
+    // Only the browser runtime and archive decoder; the headless runner and test binaries also live in bin/.
+    if (/^eden(_archive)?\.(wasm|js|data)$/.test(file)) {
       await copyFile(path.join(source, file), path.join(destination, file));
       count++;
     }

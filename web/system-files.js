@@ -2,6 +2,8 @@
 // Persists user-supplied Switch keys and firmware in IndexedDB and mounts them into the
 // Emscripten filesystem at the locations Eden expects.
 
+import { isArchive, openArchive } from './archive.js';
+
 export const EDEN_DATA_ROOT = '/home/web_user/.local/share/eden';
 
 const KEYS_PREFIX = 'keys/';
@@ -157,6 +159,8 @@ export async function readZipEntries(file) {
     return {
       name: entry.name,
       size: entry.size,
+      // Other methods (Deflate64, LZMA, ...) are left to the libarchive decoder.
+      supported: entry.method === 0 || entry.method === 8,
       stream,
       async blob() {
         return entry.method === 0 ? raw() : new Response(await stream()).blob();
@@ -169,17 +173,29 @@ function baseName(name) {
   return name.split('/').pop();
 }
 
-/// Imports a keys/firmware ZIP, a loose .keys file, or a loose .nca file.
+async function readArchiveEntries(file) {
+  const { system } = await openArchive(file, { romExtensions: [], systemExtensions: ['.keys', '.nca'] });
+  return system.map(e => ({ name: e.name, size: e.blob.size, blob: async () => e.blob }));
+}
+
+/// Imports keys/firmware from a ZIP or other archive, a loose .keys file, or a loose .nca file.
 /// Returns a summary of what was stored.
 export async function importSystemFile(file, onProgress = () => {}) {
   const lower = file.name.toLowerCase();
   let entries;
-  if (lower.endsWith('.zip')) {
-    entries = await readZipEntries(file);
-  } else if (lower.endsWith('.keys') || lower.endsWith('.nca')) {
+  if (lower.endsWith('.keys') || lower.endsWith('.nca')) {
     entries = [{ name: file.name, size: file.size, blob: async () => file }];
+  } else if (lower.endsWith('.zip')) {
+    try {
+      entries = await readZipEntries(file);
+      if (entries.some(e => !e.supported)) entries = await readArchiveEntries(file);
+    } catch (err) {
+      entries = await readArchiveEntries(file);
+    }
+  } else if (isArchive(lower)) {
+    entries = await readArchiveEntries(file);
   } else {
-    throw new Error(`${file.name}: expected a .zip, .keys or .nca file`);
+    throw new Error(`${file.name}: expected an archive, .keys or .nca file`);
   }
 
   const keyEntries = entries.filter(e => e.name.toLowerCase().endsWith('.keys'));

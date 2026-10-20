@@ -83,7 +83,7 @@
               <div class="drop-prompt">
                 <div class="upload-art">⚡</div>
                 <h2>Drop Nintendo Switch ROM</h2>
-                <p>Supports decrypted <strong>.nsp</strong>, <strong>.xci</strong>, and homebrew <strong>.nro</strong>, or a <strong>.zip</strong> holding one</p>
+                <p>Supports decrypted <strong>.nsp</strong>, <strong>.xci</strong>, and homebrew <strong>.nro</strong>, or an archive holding one (<strong>.zip</strong>, <strong>.7z</strong>, <strong>.rar</strong>, <strong>.tar</strong>, …)</p>
                 <button type="button" id="browse-btn" class="btn btn-primary">Select ROM File</button>
               </div>
             </div>
@@ -154,9 +154,9 @@
       </div>
 
       <div class="card" id="rom-card" data-widget="rom"
-           data-settings="choose a ROM (.nsp, .xci, .nro, .nca, .nso, or a .zip of one) or drop it on the screen">
+           data-settings="choose a ROM (.nsp, .xci, .nro, .nca, .nso, or a .zip/.7z/.rar/.tar archive of one) or drop it on the screen">
         <h2>📂 ROM File</h2>
-        <input type="file" id="file-input" accept=".nsp,.xci,.nro,.nca,.nso,.zip">
+        <input type="file" id="file-input" accept=".nsp,.xci,.nro,.nca,.nso,.zip,.7z,.rar,.tar,.tgz,.tbz,.tbz2,.txz,.tzst,.gz,.bz2,.xz,.lzma,.zst,.lz,.lz4,.cab,.cpio">
         <label for="file-input" class="file-label" id="file-label">Choose a Switch ROM file...</label>
         <div class="stat-row"><span class="label">Title</span><span id="title-name" class="value">None</span></div>
         <div class="stat-row"><span class="label">Size</span><span id="title-size" class="value">--</span></div>
@@ -177,9 +177,9 @@
           <button type="button" id="btn-add-firmware" class="btn btn-secondary">Add Firmware</button>
         </div>
         <button type="button" id="btn-clear-system" class="btn btn-danger">Clear stored files</button>
-        <input type="file" id="keys-input" accept=".zip,.keys" multiple hidden>
-        <input type="file" id="firmware-input" accept=".zip,.nca" multiple hidden>
-        <p id="sys-progress" class="mode-help" aria-live="polite">Drop a keys or firmware .zip here. Files stay in this browser.</p>
+        <input type="file" id="keys-input" accept=".zip,.7z,.rar,.tar,.tgz,.tbz,.tbz2,.txz,.tzst,.gz,.bz2,.xz,.lzma,.zst,.lz,.lz4,.cab,.cpio,.keys" multiple hidden>
+        <input type="file" id="firmware-input" accept=".zip,.7z,.rar,.tar,.tgz,.tbz,.tbz2,.txz,.tzst,.gz,.bz2,.xz,.lzma,.zst,.lz,.lz4,.cab,.cpio,.nca" multiple hidden>
+        <p id="sys-progress" class="mode-help" aria-live="polite">Drop a keys or firmware archive (.zip, .7z, .rar, …) here. Files stay in this browser.</p>
       </div>
 
       <div class="card" data-widget="controls"

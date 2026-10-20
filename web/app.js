@@ -8,6 +8,7 @@ import {
   readZipEntries,
 } from './system-files.js';
 import { setupInput } from './input.js';
+import { isArchive, openArchive } from './archive.js';
 
 // DOM Elements
 const canvas = document.getElementById('canvas');
@@ -124,10 +125,12 @@ const loader = {
     } else if (this.phase === 'copy') {
       const sec = (now - this.copyStart) / 1000;
       const rate = this.bytes > 0 && sec > 0.5 ? this.bytes / sec : loadHistory.copyBytesPerSec;
-      const copyRemaining = (this.bytesTotal - this.bytes) / rate;
-      label = `Reading game ${(this.bytes / 1048576).toFixed(0)} / ${(this.bytesTotal / 1048576).toFixed(0)} MB`;
+      const copyRemaining = Math.max(0, this.bytesTotal - this.bytes) / rate;
+      label = this.bytesTotal > 0
+        ? `Reading game ${(this.bytes / 1048576).toFixed(0)} / ${(this.bytesTotal / 1048576).toFixed(0)} MB`
+        : `Reading game ${(this.bytes / 1048576).toFixed(0)} MB`;
       remaining = copyRemaining + bootEst;
-      fraction = this.bytes / this.bytesTotal * (copyEst / (copyEst + bootEst));
+      fraction = this.bytesTotal > 0 ? this.bytes / this.bytesTotal * (copyEst / (copyEst + bootEst)) : 0;
     } else if (this.phase === 'boot') {
       const sec = (now - this.bootStart) / 1000;
       label = sec > bootEst ? 'Booting: taking longer than usual' : 'Booting game';
@@ -396,12 +399,31 @@ function resetEmulation() {
 }
 
 const ROM_EXTENSIONS = ['.nsp', '.xci', '.nro', '.nca', '.nso'];
-// .nca is left out: a ZIP of NCAs is a firmware dump.
-const ZIPPED_ROM_EXTENSIONS = ['.nsp', '.xci', '.nro', '.nso'];
+// .nca is left out: an archive of NCAs is a firmware dump.
+const ARCHIVED_ROM_EXTENSIONS = ['.nsp', '.xci', '.nro', '.nso'];
 
 const hasExtension = (name, extensions) => extensions.some(ext => name.toLowerCase().endsWith(ext));
+const baseName = (name) => name.split('/').pop();
 
-// Handle dropped or selected ROM file, or a ZIP holding one
+// Finds the first game in a ZIP, 7z, RAR or other archive, or returns null if there is none.
+async function findRomInArchive(file) {
+  if (file.name.toLowerCase().endsWith('.zip')) {
+    try {
+      const roms = (await readZipEntries(file)).filter(e => hasExtension(e.name, ARCHIVED_ROM_EXTENSIONS));
+      if (roms.length === 0) return null;
+      if (roms[0].supported) {
+        if (roms.length > 1) log(`${file.name} holds ${roms.length} ROMs; loading ${roms[0].name}.`, 'ui');
+        return { ...roms[0], name: baseName(roms[0].name) };
+      }
+    } catch (err) {
+      log(`${file.name}: ${err.message}; retrying with the archive decoder.`, 'ui');
+    }
+  }
+  const { rom } = await openArchive(file, { romExtensions: ARCHIVED_ROM_EXTENSIONS, systemExtensions: [] });
+  return rom ? { ...rom, name: baseName(rom.name) } : null;
+}
+
+// Handle dropped or selected ROM file, or an archive holding one
 async function handleFile(file) {
   if (!file) return;
 
@@ -411,24 +433,26 @@ async function handleFile(file) {
     await importSystemFiles([file]);
     return;
   }
-  if (lowerName.endsWith('.zip')) {
-    let entries;
+  if (isArchive(lowerName)) {
+    if (isRomLoaded) {
+      alert('A game is already running. Reload the page to start another one.');
+      return;
+    }
+    setRomStatus(`Opening ${file.name}...`);
+    let found;
     try {
-      entries = await readZipEntries(file);
+      found = await findRomInArchive(file);
     } catch (err) {
       setRomStatus(`Cannot open ${file.name}: ${err.message}`);
       alert(`Cannot open ${file.name}: ${err.message}`);
       return;
     }
-    const roms = entries.filter(e => hasExtension(e.name, ZIPPED_ROM_EXTENSIONS));
-    if (roms.length === 0) {
+    if (!found) {
+      setRomStatus(`${file.name} holds no game; importing it as keys or firmware.`);
       await importSystemFiles([file]);
       return;
     }
-    if (roms.length > 1) {
-      log(`${file.name} holds ${roms.length} ROMs; loading ${roms[0].name}.`, 'ui');
-    }
-    rom = { ...roms[0], name: roms[0].name.split('/').pop() };
+    rom = found;
   } else if (!hasExtension(lowerName, ROM_EXTENSIONS)) {
     setRomStatus(`Unsupported ROM format "${file.name}".`);
     alert(`Unsupported ROM format "${file.name}".`);
@@ -453,9 +477,10 @@ async function handleFile(file) {
   currentRomName = rom.name;
   titleName.textContent = rom.name;
   fileLabel.textContent = rom.name;
-  titleSize.textContent = `${(rom.size / (1024 * 1024)).toFixed(2)} MB`;
+  titleSize.textContent = rom.size >= 0 ? `${(rom.size / (1024 * 1024)).toFixed(2)} MB` : 'Unknown';
 
-  loader.begin(rom.size);
+  // Raw compressed streams (game.nsp.xz) do not record the size, so progress shows bytes only.
+  loader.begin(Math.max(rom.size, 0));
   try {
     wasmStatusText.textContent = 'Mounting keys & firmware...';
     setRomStatus('Mounting keys & firmware...');
@@ -478,7 +503,7 @@ async function handleFile(file) {
         pos += value.length;
         loader.bytes = pos;
       }
-      if (pos !== rom.size) {
+      if (rom.size >= 0 && pos !== rom.size) {
         throw new Error(`${rom.name} is truncated (${pos} of ${rom.size} bytes)`);
       }
     } finally {

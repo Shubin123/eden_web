@@ -11,7 +11,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const runtime = path.join(root, 'web/runtime');
 const engine = path.resolve(root, '../eden_emscripten');
 const tag = 'runtime';
-const files = ['eden.js', 'eden.wasm'];
+const files = ['eden.js', 'eden.wasm', 'eden_archive.js', 'eden_archive.wasm'];
 
 const run = (command, args, options = {}) => execFileSync(command, args, { cwd: root, encoding: 'utf8', ...options })?.trim();
 
