@@ -5,6 +5,7 @@
 //
 //   node tests/e2e.mjs [--url https://shubin123.github.io/eden_web/] [--static] [--seconds 90]
 // --static serves the local build without COOP/COEP headers, as GitHub Pages does.
+// --chrome-log prints Chrome's log, including GPU process errors, to stderr.
 //   EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip EDEN_ROM=game.nsp node tests/e2e.mjs
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -23,6 +24,7 @@ const { values: args } = parseArgs({
     seconds: { type: 'string', default: process.env.E2E_SECONDS || '90' },
     headful: { type: 'boolean', default: false },
     static: { type: 'boolean', default: false },
+    'chrome-log': { type: 'boolean', default: false },
   },
 });
 
@@ -54,13 +56,23 @@ function check(name, ok, detail) {
   if (!ok) failures.push(name);
 }
 
+if (process.platform === 'linux' && !args.headful && bootGame) {
+  console.warn('Note: headless Chrome on Linux cannot present WebGPU canvases on some GPUs (NVIDIA), ' +
+    'so frames may never appear. Use --headful for regression runs on Linux.');
+}
+
 const profile = await mkdtemp(path.join(os.tmpdir(), 'eden-e2e-'));
 const browser = await puppeteer.launch({
   executablePath: chromePath,
   headless: !args.headful,
   userDataDir: profile,
   protocolTimeout: 600_000,
-  args: ['--enable-unsafe-webgpu', '--enable-features=WebAssemblyMemory64'],
+  // --chrome-log prints Chrome's own log (GPU process errors, device losses) to stderr.
+  dumpio: args['chrome-log'],
+  args: ['--enable-unsafe-webgpu', '--enable-features=WebAssemblyMemory64',
+    ...(args['chrome-log'] ? ['--enable-logging=stderr', '--v=0'] : []),
+    // Extra Chrome flags, e.g. to try GPU backends: E2E_CHROME_ARGS="--use-angle=vulkan".
+    ...(process.env.E2E_CHROME_ARGS?.split(/\s+/).filter(Boolean) ?? [])],
 });
 
 const artifacts = path.join(root, 'artifacts');
