@@ -3,5 +3,6 @@
   "coreReadyMs": 15000,
   "firstFrameS": 45,
   "minPeakFps": 50,
-  "minSustainedFps": 12
+  "minSustainedFps": 12,
+  "minFramePngBytes": 20000
 }

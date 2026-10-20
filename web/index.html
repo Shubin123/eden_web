@@ -9,31 +9,62 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="app-container">
-    <header class="app-header">
-      <div class="header-brand">
-        <div class="switch-logo">
-          <span class="joycon-left"></span>
-          <span class="joycon-right"></span>
-        </div>
-        <h1>Eden Web</h1>
-        <span class="badge">Switch WebAssembly Port</span>
-      </div>
-      <div class="header-meta">
-        <div id="wasm-badge" class="status-badge checking">
-          <span class="indicator"></span>
-          <span id="wasm-status-text">Loading WASM...</span>
-        </div>
-        <a href="https://github.com/Shubin123/eden_web" class="gh-link" target="_blank" rel="noopener">GitHub</a>
-      </div>
-    </header>
+  <header>
+    <button type="button" class="menu-toggle" id="btn-layout-menu" aria-label="Layout and settings menu"
+            aria-expanded="false" aria-controls="layout-menu" title="Layout and settings menu">
+      <span></span><span></span><span></span>
+    </button>
+    <h1><span class="switch-logo" aria-hidden="true"><span class="joycon-left"></span><span class="joycon-right"></span></span> Eden Web</h1>
+    <p>Nintendo Switch Emulator — WebAssembly Port</p>
+    <div id="wasm-badge" class="status-badge checking">
+      <span class="indicator"></span>
+      <span id="wasm-status-text">Loading WASM...</span>
+    </div>
+  </header>
 
-    <main class="main-layout">
-      <!-- Switch Console Simulation -->
-      <section class="console-viewport-container">
-        <div class="switch-device">
-          <!-- Left Joy-Con (Neon Blue) -->
-          <div class="joycon neon-blue">
+  <aside class="layout-menu" id="layout-menu" hidden aria-label="Layout and settings menu">
+    <div class="layout-menu-header">
+      <h2>☰ Layout &amp; Settings</h2>
+      <button type="button" class="btn btn-secondary layout-menu-close" id="btn-layout-menu-close" aria-label="Close menu">✕</button>
+    </div>
+    <div class="speed-control">
+      <label for="layout-widget-width">
+        <span>Widget width</span><output id="layout-widget-width-value">260px</output>
+      </label>
+      <input id="layout-widget-width" type="range" min="200" max="480" step="10" value="260"
+             aria-label="Minimum widget width">
+    </div>
+    <div class="speed-control">
+      <label for="layout-gap">
+        <span>Spacing</span><output id="layout-gap-value">12px</output>
+      </label>
+      <input id="layout-gap" type="range" min="4" max="28" step="2" value="12" aria-label="Spacing between widgets">
+    </div>
+    <label class="mode-help audio-toggle">
+      <input type="checkbox" id="layout-beside-screen" checked>
+      Place widgets beside the screen when there is room
+    </label>
+    <h3 class="layout-menu-subhead">Widgets</h3>
+    <ul class="layout-widget-list" id="layout-widget-list"></ul>
+    <div class="mode-help">Drag a widget by its title to move it, drag its corner to resize it, or use the buttons here. Double-click a corner to reset that widget's size.</div>
+    <button type="button" class="btn btn-primary" id="btn-layout-reset" style="margin-top:10px;">↺ Reset to default layout</button>
+
+    <h3 class="layout-menu-subhead">Where to change settings</h3>
+    <div class="mode-help">Every setting lives in a widget. Press → to show and jump to it, even if you hid or collapsed it.</div>
+    <ul class="layout-settings-guide" id="layout-settings-guide"></ul>
+    <div class="mode-help">
+      Settings take effect immediately and are remembered in this browser (localStorage); keys and firmware are kept
+      in IndexedDB. <strong>Reset to default layout</strong> only restores widget placement, not settings.
+      Changes to keys or firmware after a game has started apply after a page reload.
+    </div>
+  </aside>
+  <div class="layout-menu-backdrop" id="layout-menu-backdrop" hidden></div>
+
+  <div class="main-layout">
+    <div class="canvas-panel">
+      <div id="screen-stage" class="screen-stage">
+        <div class="switch-device" id="switch-device">
+          <div class="joycon neon-blue" aria-hidden="true">
             <div class="jc-button btn-minus">-</div>
             <div class="jc-stick stick-left"></div>
             <div class="jc-dpad">
@@ -45,171 +76,224 @@
             <div class="jc-button btn-capture"></div>
           </div>
 
-          <!-- Central Display Screen -->
           <div class="screen-frame">
             <canvas id="canvas" width="1280" height="720" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
-            
+
             <div id="drop-zone" class="drop-zone">
               <div class="drop-prompt">
                 <div class="upload-art">⚡</div>
                 <h2>Drop Nintendo Switch ROM</h2>
                 <p>Supports decrypted <strong>.nsp</strong>, <strong>.xci</strong>, and homebrew <strong>.nro</strong></p>
-                <button type="button" id="browse-btn" class="btn primary-btn">Select ROM File</button>
-                <input type="file" id="file-input" accept=".nsp,.xci,.nro" style="display: none;">
+                <button type="button" id="browse-btn" class="btn btn-primary">Select ROM File</button>
               </div>
             </div>
 
+            <button type="button" class="stage-fullscreen-btn" id="btn-fullscreen-stage"
+                    title="Fullscreen (Alt+Enter)" aria-label="Fullscreen">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"
+                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>
+              </svg>
+            </button>
             <div id="pause-overlay" class="pause-overlay" style="display: none;">
               <span class="pause-icon">⏸</span>
               <span>PAUSED</span>
             </div>
           </div>
 
-          <!-- Right Joy-Con (Neon Red) -->
-          <div class="joycon neon-red">
+          <div class="joycon neon-red" aria-hidden="true">
             <div class="jc-button btn-plus">+</div>
             <div class="jc-abxy">
-              <div class="abxy-btn btn-x" data-key="KeyX">X</div>
-              <div class="abxy-btn btn-y" data-key="KeyY">Y</div>
-              <div class="abxy-btn btn-a" data-key="KeyA">A</div>
-              <div class="abxy-btn btn-b" data-key="KeyB">B</div>
+              <div class="abxy-btn btn-x">X</div>
+              <div class="abxy-btn btn-y">Y</div>
+              <div class="abxy-btn btn-a">A</div>
+              <div class="abxy-btn btn-b">B</div>
             </div>
             <div class="jc-stick stick-right"></div>
             <div class="jc-button btn-home">⌂</div>
           </div>
         </div>
-      </section>
 
-      <!-- Dashboard Cards -->
-      <section class="dashboard-grid">
-        <!-- Keys & Firmware Card -->
-        <div class="card" id="system-files-card">
-          <div class="card-header">
-            <h3>System Files</h3>
-            <span id="system-files-tag" class="tag">Checking...</span>
-          </div>
-          <div class="card-body">
-            <div class="stat-row">
-              <span class="label">prod.keys:</span>
-              <span id="sys-prod-keys" class="value">--</span>
-            </div>
-            <div class="stat-row">
-              <span class="label">title.keys:</span>
-              <span id="sys-title-keys" class="value">--</span>
-            </div>
-            <div class="stat-row">
-              <span class="label">Firmware:</span>
-              <span id="sys-firmware" class="value">--</span>
-            </div>
-            <div class="button-bar">
-              <button type="button" id="btn-add-keys" class="btn">Add Keys</button>
-              <button type="button" id="btn-add-firmware" class="btn">Add Firmware</button>
-              <button type="button" id="btn-clear-system" class="btn">Clear</button>
-            </div>
-            <input type="file" id="keys-input" accept=".zip,.keys" multiple hidden>
-            <input type="file" id="firmware-input" accept=".zip,.nca" multiple hidden>
-            <p id="sys-progress" class="sys-hint">Drop a keys or firmware .zip here. Files stay in this browser.</p>
+        <div class="fullscreen-overlay" id="fullscreen-overlay">
+          <div class="fullscreen-overlay-buttons">
+            <button type="button" class="btn btn-secondary" id="btn-fullscreen-pause">⏸ Pause</button>
+            <button type="button" class="btn btn-secondary" id="btn-fullscreen-exit">✕ Exit</button>
           </div>
         </div>
+      </div>
+      <p class="canvas-caption">
+        Canvas 1280×720 — Switch handheld resolution
+        <span id="fps"></span>
+      </p>
+    </div>
 
-        <!-- WASM Runtime Status Card -->
-        <div class="card">
-          <div class="card-header">
-            <h3>WebAssembly Binary</h3>
-            <span id="binary-source-tag" class="tag">runtime/eden.wasm</span>
-          </div>
-          <div class="card-body">
-            <div class="stat-row">
-              <span class="label">Binary Status:</span>
-              <span id="wasm-state" class="value highlight">Loaded & Verified</span>
-            </div>
-            <div class="stat-row">
-              <span class="label">Binary Size:</span>
-              <span id="wasm-size" class="value">Inspecting...</span>
-            </div>
-            <div class="stat-row">
-              <span class="label">Memory Model:</span>
-              <span class="value">Memory64 Wasm (SharedArrayBuffer)</span>
-            </div>
-            <div class="stat-row">
-              <span class="label">Architecture:</span>
-              <span class="value">Dynarmic IR → Wasm JIT</span>
-            </div>
-            <div class="stat-row">
-              <span class="label">Cross-Origin Isolation:</span>
-              <span id="coop-status" class="value">Active (COOP/COEP)</span>
-            </div>
-          </div>
+    <div class="controls-panel" id="widget-grid">
+      <div class="card" data-widget="renderer"
+           data-settings="screen scaling (smooth or pixelated), aspect fit, Joy-Con frame">
+        <h2>Renderer</h2>
+        <div class="stat-row"><span class="label">Backend</span><span class="value">WebGPU</span></div>
+        <div class="stat-row"><span class="label">GPU</span><span id="gpu-adapter" class="value">Checking...</span></div>
+        <div class="stat-row"><span class="label">Canvas</span><span id="canvas-size" class="value">1280×720</span></div>
+        <label for="screen-filter" class="mode-help field-label">Screen scaling</label>
+        <select id="screen-filter" class="renderer-select" aria-label="Screen scaling">
+          <option value="smooth">Smooth — bilinear filtering</option>
+          <option value="pixelated">Sharp — nearest pixel</option>
+        </select>
+        <label for="screen-fit" class="mode-help field-label">Aspect</label>
+        <select id="screen-fit" class="renderer-select" aria-label="Aspect">
+          <option value="contain">Keep 16:9</option>
+          <option value="fill">Stretch to fill</option>
+        </select>
+        <label class="mode-help audio-toggle">
+          <input type="checkbox" id="show-joycons" checked>
+          Show the Joy-Con frame around the screen (they light up as you press mapped keys)
+        </label>
+        <div id="renderer-help" class="mode-help" style="margin-top:8px;">
+          Eden requires WebGPU. This engine build has no WebGL fallback. Internal resolution and renderer backend are fixed by the engine build.
         </div>
+      </div>
 
-        <!-- Emulation Controls Card -->
-        <div class="card">
-          <div class="card-header">
-            <h3>Emulation Controls</h3>
-          </div>
-          <div class="card-body">
-            <div class="button-bar">
-              <button id="btn-play" class="btn" disabled>Play</button>
-              <button id="btn-pause" class="btn" disabled>Pause</button>
-              <button id="btn-step" class="btn" disabled>Step Frame</button>
-              <button id="btn-reset" class="btn" disabled>Reset</button>
-              <button id="btn-fullscreen" class="btn">Fullscreen</button>
-            </div>
-          </div>
+      <div class="card" id="rom-card" data-widget="rom"
+           data-settings="choose a ROM (.nsp, .xci, .nro, .nca, .nso) or drop it on the screen">
+        <h2>📂 ROM File</h2>
+        <input type="file" id="file-input" accept=".nsp,.xci,.nro,.nca,.nso">
+        <label for="file-input" class="file-label" id="file-label">Choose a Switch ROM file...</label>
+        <div class="stat-row"><span class="label">Title</span><span id="title-name" class="value">None</span></div>
+        <div class="stat-row"><span class="label">Size</span><span id="title-size" class="value">--</span></div>
+        <div id="rom-status" class="mode-help" aria-live="polite" style="margin-top:6px;">Ready. Load a ROM to begin — you can also drop it on the screen.</div>
+        <progress id="rom-progress" max="100" value="0" hidden></progress>
+        <div id="rom-eta" class="mode-help" aria-live="off" hidden></div>
+      </div>
+
+      <div class="card" id="system-files-card" data-widget="system-files"
+           data-settings="add or clear prod.keys, title.keys and firmware">
+        <h2>🔑 System Files</h2>
+        <div class="stat-row"><span class="label">Status</span><span id="system-files-tag" class="value">Checking...</span></div>
+        <div class="stat-row"><span class="label">prod.keys</span><span id="sys-prod-keys" class="value">--</span></div>
+        <div class="stat-row"><span class="label">title.keys</span><span id="sys-title-keys" class="value">--</span></div>
+        <div class="stat-row"><span class="label">Firmware</span><span id="sys-firmware" class="value">--</span></div>
+        <div class="button-row">
+          <button type="button" id="btn-add-keys" class="btn btn-secondary">Add Keys</button>
+          <button type="button" id="btn-add-firmware" class="btn btn-secondary">Add Firmware</button>
         </div>
+        <button type="button" id="btn-clear-system" class="btn btn-danger">Clear stored files</button>
+        <input type="file" id="keys-input" accept=".zip,.keys" multiple hidden>
+        <input type="file" id="firmware-input" accept=".zip,.nca" multiple hidden>
+        <p id="sys-progress" class="mode-help" aria-live="polite">Drop a keys or firmware .zip here. Files stay in this browser.</p>
+      </div>
 
-        <!-- ROM & Execution Info Card -->
-        <div class="card">
-          <div class="card-header">
-            <h3>Guest Info</h3>
+      <div class="card" data-widget="controls"
+           data-settings="run, pause, reset, keyboard map">
+        <h2>▶ Controls</h2>
+        <button class="btn btn-secondary" id="btn-play" disabled>▶ Run / Resume</button>
+        <button class="btn btn-secondary" id="btn-pause" disabled>⏸ Pause</button>
+        <button class="btn btn-success" id="btn-step" disabled title="Not supported by the engine yet">Step Frame</button>
+        <button class="btn btn-secondary" id="btn-reset" disabled>⏹ Stop &amp; reload</button>
+        <details class="keymap" open>
+          <summary>⌨ Keymap</summary>
+          <div class="controls-legend">
+            <div><kbd>A</kbd> <kbd>S</kbd> <kbd>Z</kbd> <kbd>X</kbd> A, B, Y, X</div>
+            <div><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> D-Pad</div>
+            <div><kbd>Q</kbd> / <kbd>E</kbd> L / R</div>
+            <div><kbd>1</kbd> / <kbd>3</kbd> ZL / ZR</div>
+            <div><kbd>Enter</kbd> / <kbd>Backspace</kbd> + / −</div>
           </div>
-          <div class="card-body">
-            <div class="stat-row">
-              <span class="label">Loaded Title:</span>
-              <span id="title-name" class="value">None</span>
-            </div>
-            <div class="stat-row">
-              <span class="label">File Size:</span>
-              <span id="title-size" class="value">--</span>
-            </div>
-            <div class="stat-row">
-              <span class="label">Game FPS:</span>
-              <span id="fps-counter" class="value highlight">--</span>
-            </div>
-            <div class="stat-row">
-              <span class="label">Frametime:</span>
-              <span id="frametime-counter" class="value">-- ms</span>
-            </div>
-          </div>
+        </details>
+        <div class="mode-help" style="margin-top:6px;">Restarting a game needs a page reload; the core cannot reboot in place.</div>
+      </div>
+
+      <div class="card" id="fullscreen-card" data-widget="fullscreen"
+           data-settings="fullscreen, keep the Joy-Con frame in fullscreen">
+        <h2>⛶ Fullscreen</h2>
+        <button type="button" class="btn btn-secondary" id="btn-fullscreen">⛶ Fullscreen</button>
+        <label class="mode-help audio-toggle">
+          <input type="checkbox" id="fullscreen-joycons">
+          Keep the Joy-Con frame in fullscreen
+        </label>
+        <div id="fullscreen-help" class="mode-help" aria-live="polite" style="margin-top:7px;">Alt+Enter toggles fullscreen. Esc leaves it.</div>
+      </div>
+
+      <div class="card" id="performance-card" data-widget="performance">
+        <h2>📊 Performance</h2>
+        <div class="stat-row"><span class="label">State</span><span id="wasm-state" class="value">Loading</span></div>
+        <div class="stat-row"><span class="label">Game FPS</span><span id="fps-counter" class="value highlight">--</span></div>
+        <div class="stat-row"><span class="label">System FPS</span><span id="system-fps" class="value">--</span></div>
+        <div class="stat-row"><span class="label">Frametime</span><span id="frametime-counter" class="value">-- ms</span></div>
+        <div class="stat-row"><span class="label">Speed</span><span id="emu-speed" class="value">--</span></div>
+      </div>
+
+      <div class="card" id="audio-card" data-widget="audio"
+           data-settings="sound and volume (not available in this engine build yet)">
+        <h2>🔊 Audio</h2>
+        <button type="button" class="btn btn-secondary" id="btn-sound" disabled>🔇 Sound: unavailable</button>
+        <div class="speed-control">
+          <label for="audio-volume">
+            <span>Volume</span><output id="audio-volume-value">--</output>
+          </label>
+          <input id="audio-volume" type="range" min="0" max="100" step="1" value="80" disabled aria-label="Volume">
         </div>
-
-        <!-- Joy-Con / Keyboard Mapping Card -->
-        <div class="card">
-          <div class="card-header">
-            <h3>Keyboard Controls</h3>
-          </div>
-          <div class="card-body controls-legend">
-            <div class="legend-col">
-              <div><kbd>A</kbd> <kbd>S</kbd> <kbd>Z</kbd> <kbd>X</kbd> : A, B, X, Y</div>
-              <div><kbd>Arrows</kbd> : D-Pad</div>
-            </div>
-            <div class="legend-col">
-              <div><kbd>Q</kbd> / <kbd>E</kbd> : L / R</div>
-              <div><kbd>1</kbd> / <kbd>3</kbd> : ZL / ZR</div>
-              <div><kbd>Enter</kbd> / <kbd>Backspace</kbd> : + / -</div>
-            </div>
-          </div>
+        <div id="audio-status" class="mode-help">
+          This engine build uses a null audio sink, so games run silently. Volume controls will be enabled once the
+          core streams audio to the browser.
         </div>
-      </section>
-    </main>
+      </div>
 
-    <footer class="app-footer">
-      <span>Eden WebAssembly Port &copy; 2026</span>
-      <span>Engine: <a href="https://github.com/Shubin123/eden_emscripten" target="_blank" rel="noopener">eden_emscripten</a></span>
-    </footer>
+      <div class="card" id="local-play-card" data-widget="local-play"
+           data-settings="local wireless linking (not available yet)">
+        <h2>📡 Local Play</h2>
+        <div class="stat-row"><span class="label">Status</span><span class="value">Not available</span></div>
+        <div class="mode-help" style="margin-top:6px;">
+          Switch local wireless (LDN) is not wired up in the browser core yet. When it is, consoles will link
+          directly between browsers here, like Azahar Web's Local Play.
+        </div>
+      </div>
+
+      <div class="card" id="save-state-card" data-widget="save-states"
+           data-settings="save and restore slots (not available yet)">
+        <h2>Save States</h2>
+        <div class="save-toolbar">
+          <select id="save-state-slot" class="renderer-select" aria-label="Save-state slot" disabled>
+            <option value="1">Slot 1</option>
+          </select>
+          <button class="btn btn-success" id="btn-save-state" disabled>Save current game</button>
+        </div>
+        <div class="save-empty">No save states.</div>
+        <div class="mode-help" style="margin-top:7px;">
+          The Eden core does not expose save states to the browser yet. In-game saves live in the emulator's
+          in-memory filesystem and are lost when the page reloads.
+        </div>
+      </div>
+
+      <div class="card" id="wasm-card" data-widget="wasm">
+        <h2>🧩 WebAssembly</h2>
+        <div class="stat-row"><span class="label">Binary</span><span id="binary-source-tag" class="value">runtime/eden.wasm</span></div>
+        <div class="stat-row"><span class="label">Size</span><span id="wasm-size" class="value">Inspecting...</span></div>
+        <div class="stat-row"><span class="label">Memory</span><span class="value">Memory64 (shared)</span></div>
+        <div class="stat-row"><span class="label">CPU</span><span class="value">Dynarmic IR → Wasm JIT</span></div>
+        <div class="stat-row"><span class="label">Isolation</span><span id="coop-status" class="value">Checking...</span></div>
+        <div class="stat-row"><span class="label">Threads</span><span id="hw-threads" class="value">--</span></div>
+      </div>
+
+      <div class="card" data-widget="log" data-default-span="2"
+           data-settings="engine output; copy or clear it">
+        <h2>📋 Log</h2>
+        <div class="log-box" id="log"></div>
+        <div class="button-row" style="margin-top:6px;">
+          <button type="button" class="btn btn-secondary" id="btn-log-copy">Copy log</button>
+          <button type="button" class="btn btn-secondary" id="btn-log-clear">Clear</button>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <footer class="app-footer">
+    <span>Eden WebAssembly Port &copy; 2026</span>
+    <span>Engine: <a href="https://github.com/Shubin123/eden_emscripten" target="_blank" rel="noopener">eden_emscripten</a>
+      · <a href="https://github.com/Shubin123/eden_web" target="_blank" rel="noopener">GitHub</a></span>
+  </footer>
+
   <script src="runtime/eden.js"></script>
+  <script src="layout.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

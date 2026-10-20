@@ -45,7 +45,7 @@ if (!url) {
   url = `http://127.0.0.1:${server.address().port}/`;
 }
 
-const report = { url, startedAt: new Date().toISOString(), bootGame, checks: [], timeline: [], errors: [] };
+const report = { url, startedAt: new Date().toISOString(), bootGame, checks: [], timeline: [], frames: [], errors: [] };
 const failures = [];
 function check(name, ok, detail) {
   report.checks.push({ name, ok, detail });
@@ -119,19 +119,32 @@ try {
     const bootStart = Date.now();
     const deadline = bootStart + Number(args.seconds) * 1000;
     let shot = 0;
+    const shotStages = new Set();
     while (Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, 2000));
       const sample = await page.evaluate(() => ({
         status: document.getElementById('wasm-status-text').textContent,
         state: document.getElementById('wasm-state').textContent,
         fps: parseFloat(document.getElementById('fps-counter').textContent) || 0,
+        load: document.getElementById('rom-eta').hidden ? '' : document.getElementById('rom-eta').textContent,
+        progress: document.getElementById('rom-progress').value,
       }));
       sample.t = Math.round((Date.now() - bootStart) / 1000);
       report.timeline.push(sample);
-      console.log(`  t=${sample.t}s ${sample.state} ${sample.fps.toFixed(1)} fps`);
+      console.log(`  t=${sample.t}s ${sample.state} ${sample.fps.toFixed(1)} fps | ${sample.load}`);
+      for (const stage of ['Reading', 'Booting', 'Loaded']) {
+        if (sample.load.startsWith(stage) && !shotStages.has(stage)) {
+          shotStages.add(stage);
+          await page.screenshot({ path: path.join(artifacts, `e2e-${stamp}-load-${stage.toLowerCase()}.png`) });
+        }
+      }
       if (sample.state === 'Failed') break;
-      if (sample.t >= 30 * (shot + 1)) {
-        await page.screenshot({ path: path.join(artifacts, `e2e-${stamp}-${shot++}.png`) });
+      if (sample.t >= 10 * (shot + 1)) {
+        await page.screenshot({ path: path.join(artifacts, `e2e-${stamp}-${shot}.png`) });
+        // A blank or single-colour canvas compresses to a few KB; a rendered game frame does not.
+        const frame = await (await page.$('#canvas')).screenshot({ path: path.join(artifacts, `e2e-${stamp}-${shot}-canvas.png`) });
+        report.frames.push({ t: sample.t, bytes: frame.length });
+        shot++;
       }
     }
 
@@ -139,6 +152,7 @@ try {
     const firstFrame = report.timeline.find(sample => sample.fps > 0);
     const peakFps = Math.max(0, ...report.timeline.map(sample => sample.fps));
     const last = report.timeline.at(-1);
+    report.loadSummary = report.timeline.filter(sample => sample.state === 'Running' || sample.load.startsWith('Loaded')).map(sample => sample.load).find(Boolean);
     report.bootToRunningS = running?.t ?? null;
     report.firstFrameS = firstFrame?.t ?? null;
     report.peakFps = peakFps;
@@ -149,6 +163,9 @@ try {
     check('peak game fps', peakFps >= baseline.minPeakFps, `${peakFps.toFixed(1)} >= ${baseline.minPeakFps}`);
     check('sustained game fps', report.sustainedFps >= baseline.minSustainedFps, `median of last third ${report.sustainedFps.toFixed(1)} >= ${baseline.minSustainedFps}`);
     check('still running at end', last?.state === 'Running', last?.state);
+    const detailed = report.frames.filter(frame => frame.bytes >= baseline.minFramePngBytes);
+    check('game frames visible', detailed.length > 0,
+      `${detailed.length}/${report.frames.length} canvas captures >= ${baseline.minFramePngBytes} bytes, largest ${Math.max(0, ...report.frames.map(frame => frame.bytes))}`);
     check('no critical logs', criticalLogs === 0, `${criticalLogs}`);
   }
 
