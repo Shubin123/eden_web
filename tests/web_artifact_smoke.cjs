@@ -15,6 +15,8 @@ const expectedExports = [
     'eden_pause',
     'eden_resume',
     'eden_shutdown',
+    'eden_set_button',
+    'eden_set_stick',
     'eden_get_state',
     'eden_get_load_result',
     'eden_get_game_fps',

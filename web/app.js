@@ -6,6 +6,7 @@ import {
   clearSystemFiles,
   mountSystemFiles,
 } from './system-files.js';
+import { setupInput } from './input.js';
 
 // DOM Elements
 const canvas = document.getElementById('canvas');
@@ -549,47 +550,8 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// Keyboard mapping to Joy-Con controls
-const keyElementMap = {
-  KeyA: document.querySelector('.abxy-btn.btn-a'),
-  KeyS: document.querySelector('.abxy-btn.btn-b'),
-  KeyX: document.querySelector('.abxy-btn.btn-x'),
-  KeyZ: document.querySelector('.abxy-btn.btn-y'),
-  ArrowUp: document.querySelector('.dpad-btn.up'),
-  ArrowDown: document.querySelector('.dpad-btn.down'),
-  ArrowLeft: document.querySelector('.dpad-btn.left'),
-  ArrowRight: document.querySelector('.dpad-btn.right'),
-  Enter: document.querySelector('.btn-plus'),
-  Backspace: document.querySelector('.btn-minus'),
-  KeyQ: document.querySelector('.stick-left'),
-  KeyE: document.querySelector('.stick-right'),
-};
-
-window.addEventListener('keydown', (e) => {
-  const elem = keyElementMap[e.code];
-  if (elem) {
-    elem.classList.add('pressed');
-  }
-});
-
-window.addEventListener('keyup', (e) => {
-  const elem = keyElementMap[e.code];
-  if (elem) {
-    elem.classList.remove('pressed');
-  }
-});
-
-// Interactive on-screen Joy-Con button press feedback
-document.querySelectorAll('.abxy-btn, .dpad-btn, .jc-button, .jc-stick').forEach(btn => {
-  btn.addEventListener('mousedown', () => btn.classList.add('pressed'));
-  btn.addEventListener('mouseup', () => btn.classList.remove('pressed'));
-  btn.addEventListener('mouseleave', () => btn.classList.remove('pressed'));
-  btn.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    btn.classList.add('pressed');
-  });
-  btn.addEventListener('touchend', () => btn.classList.remove('pressed'));
-});
+// Controller input goes to the engine once a game is running.
+setupInput(() => (isRomLoaded ? edenModule : null));
 
 // Keys & firmware widget
 const systemCard = document.getElementById('system-files-card');
