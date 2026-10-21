@@ -1,0 +1,394 @@
+{
+ "schema": "eden-web/result-set@1",
+ "createdAt": "2026-10-20T12:00:00.000Z",
+ "meta": {
+  "source": "matrix",
+  "mode": "bench",
+  "note": "Synthetic results for tests/compare_results.mjs",
+  "runtime": "candidate"
+ },
+ "results": [
+  {
+   "schema": "eden-web/result@1",
+   "id": "cand-1",
+   "createdAt": "2026-10-20T12:01:00.000Z",
+   "source": "matrix",
+   "confidence": "automated",
+   "game": {
+    "titleId": "01009BF0072D4000",
+    "name": "Captain Toad Treasure Tracker",
+    "version": 0,
+    "displayVersion": null
+   },
+   "core": {
+    "id": "jit",
+    "emulator": "Eden",
+    "runtimeVersion": "0.1.0 · web aaaaaaa · engine 2222222222"
+   },
+   "environment": {
+    "browser": "Chrome/153.0.0.0",
+    "platform": "Linux",
+    "gpu": "synthetic",
+    "hardwareConcurrency": 16
+   },
+   "scenario": {
+    "name": "boot-60s",
+    "seconds": 60,
+    "warm": false,
+    "settings": {
+     "core": "jit"
+    }
+   },
+   "outcome": "pass",
+   "failure": null,
+   "metrics": {
+    "coreReadyMs": 800,
+    "firstFrameS": 16,
+    "sustainedFps": 21.5,
+    "peakFps": 60,
+    "frameTime": {
+     "count": 1200,
+     "p50": 45,
+     "p95": 67.5,
+     "p99": 61,
+     "max": 91.5,
+     "stutters": 2,
+     "stutterMs": 90,
+     "stutterTotalMs": 120
+    }
+   },
+   "notes": ""
+  },
+  {
+   "schema": "eden-web/result@1",
+   "id": "cand-2",
+   "createdAt": "2026-10-20T12:02:00.000Z",
+   "source": "matrix",
+   "confidence": "automated",
+   "game": {
+    "titleId": "01009BF0072D4000",
+    "name": "Captain Toad Treasure Tracker",
+    "version": 0,
+    "displayVersion": null
+   },
+   "core": {
+    "id": "jit",
+    "emulator": "Eden",
+    "runtimeVersion": "0.1.0 · web aaaaaaa · engine 2222222222"
+   },
+   "environment": {
+    "browser": "Chrome/153.0.0.0",
+    "platform": "Linux",
+    "gpu": "synthetic",
+    "hardwareConcurrency": 16
+   },
+   "scenario": {
+    "name": "boot-60s",
+    "seconds": 60,
+    "warm": true,
+    "settings": {
+     "core": "jit"
+    }
+   },
+   "outcome": "pass",
+   "failure": null,
+   "metrics": {
+    "coreReadyMs": 500,
+    "firstFrameS": 14,
+    "sustainedFps": 22,
+    "peakFps": 60,
+    "frameTime": {
+     "count": 1200,
+     "p50": 45,
+     "p95": 67.5,
+     "p99": 80,
+     "max": 120,
+     "stutters": 2,
+     "stutterMs": 90,
+     "stutterTotalMs": 120
+    }
+   },
+   "notes": ""
+  },
+  {
+   "schema": "eden-web/result@1",
+   "id": "cand-3",
+   "createdAt": "2026-10-20T12:03:00.000Z",
+   "source": "matrix",
+   "confidence": "automated",
+   "game": {
+    "titleId": "01009BF0072D4000",
+    "name": "Captain Toad Treasure Tracker",
+    "version": 0,
+    "displayVersion": null
+   },
+   "core": {
+    "id": "jit",
+    "emulator": "Eden",
+    "runtimeVersion": "0.1.0 · web aaaaaaa · engine 2222222222"
+   },
+   "environment": {
+    "browser": "Chrome/153.0.0.0",
+    "platform": "Linux",
+    "gpu": "synthetic",
+    "hardwareConcurrency": 16
+   },
+   "scenario": {
+    "name": "boot-60s",
+    "seconds": 60,
+    "warm": true,
+    "settings": {
+     "core": "jit"
+    }
+   },
+   "outcome": "pass",
+   "failure": null,
+   "metrics": {
+    "coreReadyMs": 500,
+    "firstFrameS": 14,
+    "sustainedFps": 22,
+    "peakFps": 60,
+    "frameTime": {
+     "count": 1200,
+     "p50": 45,
+     "p95": 67.5,
+     "p99": 82,
+     "max": 123,
+     "stutters": 2,
+     "stutterMs": 90,
+     "stutterTotalMs": 120
+    }
+   },
+   "notes": ""
+  },
+  {
+   "schema": "eden-web/result@1",
+   "id": "cand-4",
+   "createdAt": "2026-10-20T12:04:00.000Z",
+   "source": "matrix",
+   "confidence": "automated",
+   "game": {
+    "titleId": "01009BF0072D4000",
+    "name": "Captain Toad Treasure Tracker",
+    "version": 0,
+    "displayVersion": null
+   },
+   "core": {
+    "id": "jit",
+    "emulator": "Eden",
+    "runtimeVersion": "0.1.0 · web aaaaaaa · engine 2222222222"
+   },
+   "environment": {
+    "browser": "Chrome/153.0.0.0",
+    "platform": "Linux",
+    "gpu": "synthetic",
+    "hardwareConcurrency": 16
+   },
+   "scenario": {
+    "name": "boot-60s",
+    "seconds": 60,
+    "warm": true,
+    "settings": {
+     "core": "jit"
+    }
+   },
+   "outcome": "pass",
+   "failure": null,
+   "metrics": {
+    "coreReadyMs": 500,
+    "firstFrameS": 14,
+    "sustainedFps": 22,
+    "peakFps": 60,
+    "frameTime": {
+     "count": 1200,
+     "p50": 45,
+     "p95": 67.5,
+     "p99": 85,
+     "max": 127.5,
+     "stutters": 2,
+     "stutterMs": 90,
+     "stutterTotalMs": 120
+    }
+   },
+   "notes": ""
+  },
+  {
+   "schema": "eden-web/result@1",
+   "id": "cand-5",
+   "createdAt": "2026-10-20T12:05:00.000Z",
+   "source": "matrix",
+   "confidence": "automated",
+   "game": {
+    "titleId": "01002030143D0000",
+    "name": "Blaster Master Zero 3",
+    "version": 0,
+    "displayVersion": null
+   },
+   "core": {
+    "id": "interpreter",
+    "emulator": "Eden",
+    "runtimeVersion": "0.1.0 · web aaaaaaa · engine 2222222222"
+   },
+   "environment": {
+    "browser": "Chrome/153.0.0.0",
+    "platform": "Linux",
+    "gpu": "synthetic",
+    "hardwareConcurrency": 16
+   },
+   "scenario": {
+    "name": "boot-60s",
+    "seconds": 60,
+    "warm": false,
+    "settings": {
+     "core": "interpreter"
+    }
+   },
+   "outcome": "fail",
+   "failure": {
+    "category": "crash",
+    "detail": "no crashes: t=20s runtime aborted: unreachable"
+   },
+   "metrics": {
+    "coreReadyMs": 800,
+    "firstFrameS": 14,
+    "sustainedFps": 0
+   },
+   "notes": ""
+  },
+  {
+   "schema": "eden-web/result@1",
+   "id": "cand-6",
+   "createdAt": "2026-10-20T12:06:00.000Z",
+   "source": "matrix",
+   "confidence": "automated",
+   "game": {
+    "titleId": "0100AA80194B0000",
+    "name": "Pikmin 1",
+    "version": 0,
+    "displayVersion": null
+   },
+   "core": {
+    "id": "jit",
+    "emulator": "Eden",
+    "runtimeVersion": "0.1.0 · web aaaaaaa · engine 2222222222"
+   },
+   "environment": {
+    "browser": "Chrome/153.0.0.0",
+    "platform": "Linux",
+    "gpu": "synthetic",
+    "hardwareConcurrency": 16
+   },
+   "scenario": {
+    "name": "boot-60s",
+    "seconds": 60,
+    "warm": false,
+    "settings": {
+     "core": "jit"
+    }
+   },
+   "outcome": "pass",
+   "failure": null,
+   "metrics": {
+    "coreReadyMs": 800,
+    "firstFrameS": 14,
+    "sustainedFps": 30,
+    "peakFps": 30,
+    "frameTime": {
+     "count": 1200,
+     "p50": 33,
+     "p95": 49.5,
+     "p99": 40,
+     "max": 60,
+     "stutters": 0,
+     "stutterMs": 66,
+     "stutterTotalMs": 0
+    }
+   },
+   "notes": ""
+  },
+  {
+   "schema": "eden-web/result@1",
+   "id": "cand-7",
+   "createdAt": "2026-10-20T12:07:00.000Z",
+   "source": "matrix",
+   "confidence": "automated",
+   "game": {
+    "titleId": "01009BF0072D4000",
+    "name": "Captain Toad Treasure Tracker",
+    "version": 0,
+    "displayVersion": null
+   },
+   "core": {
+    "id": "interpreter",
+    "emulator": "Eden",
+    "runtimeVersion": "0.1.0 · web aaaaaaa · engine 2222222222"
+   },
+   "environment": {
+    "browser": "Chrome/153.0.0.0",
+    "platform": "Linux",
+    "gpu": "synthetic",
+    "hardwareConcurrency": 16
+   },
+   "scenario": {
+    "name": "boot-60s",
+    "seconds": 60,
+    "warm": false,
+    "settings": {
+     "core": "interpreter"
+    }
+   },
+   "outcome": "fail",
+   "failure": {
+    "category": "hang",
+    "detail": "no hang: no frames from t=40s for 10 s"
+   },
+   "metrics": {
+    "coreReadyMs": 800,
+    "firstFrameS": 14,
+    "sustainedFps": 0
+   },
+   "notes": ""
+  },
+  {
+   "schema": "eden-web/result@1",
+   "id": "cand-8",
+   "createdAt": "2026-10-20T12:08:00.000Z",
+   "source": "matrix",
+   "confidence": "automated",
+   "game": {
+    "titleId": "01009BF0072D4000",
+    "name": "Captain Toad Treasure Tracker",
+    "version": 0,
+    "displayVersion": null
+   },
+   "core": {
+    "id": "jit",
+    "emulator": "Eden",
+    "runtimeVersion": "0.1.0 · web aaaaaaa · engine 2222222222"
+   },
+   "environment": {
+    "browser": "Chrome/153.0.0.0",
+    "platform": "Linux",
+    "gpu": "synthetic",
+    "hardwareConcurrency": 16
+   },
+   "scenario": {
+    "name": "crash-recovery",
+    "seconds": 60,
+    "warm": false,
+    "settings": {
+     "core": "jit"
+    }
+   },
+   "outcome": "pass",
+   "failure": null,
+   "metrics": {
+    "coreReadyMs": 800,
+    "firstFrameS": 14,
+    "sustainedFps": 20,
+    "peakFps": 60
+   },
+   "notes": ""
+  }
+ ]
+}
