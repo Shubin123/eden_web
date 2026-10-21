@@ -20,6 +20,7 @@ import {
   clearCrashes,
 } from './recovery.js';
 import { setupCompatibility } from './compat.js';
+import { setupDiagnostics } from './diagnostics.js';
 
 // DOM Elements
 const canvas = document.getElementById('canvas');
@@ -92,6 +93,15 @@ function log(text, kind = '') {
   while (logBox.childElementCount > LOG_LIMIT) logBox.firstElementChild.remove();
   if (atBottom) logBox.scrollTop = logBox.scrollHeight;
 }
+
+const diagnostics = setupDiagnostics({
+  getModule: () => edenModule,
+  getLog: () => recentLog,
+  getCore: () => runningCore,
+  getGameFile: () => currentRomName,
+  listCrashes,
+  getSystemFileStatus,
+});
 
 // Load progress: mounting system files, copying the game into the engine filesystem (timed by
 // live throughput), then booting (timed from previous boots on this browser, else a default).
@@ -347,6 +357,7 @@ async function initWasmCoreOnce() {
     wasmStatusText.textContent = 'Runtime missing';
     wasmState.textContent = 'runtime/eden.js not found (run npm run sync)';
     log('runtime/eden.js not found (run npm run sync).', 'err');
+    diagnostics.fail('artifact', 'runtime/eden.js not found');
     initPromise = null;
     return;
   }
@@ -354,12 +365,23 @@ async function initWasmCoreOnce() {
     wasmStatusText.textContent = 'Needs cross-origin isolation';
     wasmState.textContent = 'Reload once the service worker is active';
     log('Cross-origin isolation is not active yet; reload once the service worker is installed.', 'err');
+    diagnostics.fail('environment', 'Cross-origin isolation is not active');
     initPromise = null;
+    return;
+  }
+  const unsupported = diagnostics.blockingProblem();
+  if (unsupported) {
+    wasmBadge.className = 'status-badge';
+    wasmStatusText.textContent = 'Browser not supported';
+    wasmState.textContent = unsupported;
+    log(unsupported, 'err');
+    diagnostics.fail('environment', unsupported);
     return;
   }
 
   try {
     wasmStatusText.textContent = 'Instantiating WASM...';
+    diagnostics.stage('init');
     edenModule = await createEdenModule({
       locateFile: (path) => 'runtime/' + path,
       preRun: [coreEnvironment(runningCore)],
@@ -373,12 +395,14 @@ async function initWasmCoreOnce() {
     wasmStatusText.textContent = 'WASM Core Ready';
     wasmState.textContent = 'Idle';
     log('Eden WebAssembly core ready.', 'ui');
+    diagnostics.stage('ready');
   } catch (err) {
     console.error('Failed to initialize Eden WebAssembly module:', err);
     wasmBadge.className = 'status-badge';
     wasmStatusText.textContent = 'WASM Init Failed';
     wasmState.textContent = 'Error: ' + err.message;
     log(`WASM init failed: ${err.message}`, 'err');
+    diagnostics.fail(null, err);
   }
 }
 
@@ -528,6 +552,7 @@ async function handleFile(file) {
 
   if (!await inspectGpu()) {
     setRomStatus('Cannot boot: WebGPU is unavailable. See the Renderer card for details. This runtime has no WebGL fallback.');
+    diagnostics.fail('environment', 'WebGPU is unavailable');
     return;
   }
 
@@ -547,6 +572,7 @@ async function handleFile(file) {
   try {
     wasmStatusText.textContent = 'Mounting keys & firmware...';
     setRomStatus('Mounting keys & firmware...');
+    diagnostics.stage('system-files');
     const mounted = await mountSystemFiles(edenModule.FS);
     log(`Mounted ${mounted} system files into the Eden data directory.`, 'ui');
     const restored = await restoreSaves(edenModule.FS).catch(err => {
@@ -560,6 +586,7 @@ async function handleFile(file) {
     const path = '/roms/' + rom.name;
     edenModule.FS.mkdirTree('/roms');
     loader.setPhase('copy');
+    diagnostics.stage('copy');
     const stream = edenModule.FS.open(path, 'w');
     const reader = (await rom.stream()).getReader();
     try {
@@ -579,6 +606,7 @@ async function handleFile(file) {
       edenModule.FS.close(stream);
     }
     loader.setPhase('boot');
+    diagnostics.stage('boot');
 
     if (edenModule.ccall('eden_boot', 'number', ['string'], [path]) !== 0) {
       throw new Error('eden_boot rejected the request');
@@ -599,6 +627,7 @@ async function handleFile(file) {
     loader.fail();
     wasmStatusText.textContent = 'ROM Load Failed';
     setRomStatus(`ROM load failed: ${err.message}`);
+    diagnostics.fail(null, err);
   }
 }
 
@@ -842,6 +871,7 @@ async function onCrash(reason) {
   if (crashed || !lastGameFile || memoryUnavailable) return;
   crashed = true;
   stopSaveWatch?.();
+  diagnostics.fail(/^no frames/.test(reason) ? 'hang' : 'crash', reason);
   // The engine logs a backtrace right after a guest fault; include it in the report.
   await new Promise(resolve => setTimeout(resolve, 500));
   const version = await fetch('version.json', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null);
