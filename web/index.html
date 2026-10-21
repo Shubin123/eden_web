@@ -168,6 +168,18 @@
         <div class="stat-row"><span class="label">Running</span><span id="cpu-core-active" class="value">--</span></div>
         <button class="btn" id="cpu-core-apply" hidden>Reload to switch core</button>
         <p class="mode-help">The core is fixed once the runtime starts, so switching reloads the page. Keys and firmware stay installed.</p>
+        <h3>Crash recovery</h3>
+        <label class="mode-help audio-toggle">
+          <input type="checkbox" id="auto-restart" checked>
+          Restart the game from the last save point if it crashes or freezes
+        </label>
+        <p id="recovery-status" class="mode-help">No crashes this session.</p>
+        <div class="stat-row"><span class="label">Crash reports</span><span id="crash-count" class="value">0</span></div>
+        <div class="save-toolbar">
+          <button class="btn" id="btn-crash-download" disabled>Download reports</button>
+          <button class="btn" id="btn-crash-clear" disabled>Clear</button>
+        </div>
+        <p class="mode-help">Reports stay in this browser. They include the game, core, versions and recent log, so the crash can be reproduced and tested later.</p>
       </div>
 
       <div class="card" id="rom-card" data-widget="rom"
@@ -278,9 +290,11 @@
           <button class="btn btn-success" id="btn-save-state" disabled>Save current game</button>
         </div>
         <div class="save-empty">No save states.</div>
+        <div class="stat-row"><span class="label">In-game save point</span><span id="save-point" class="value">None yet</span></div>
+        <button class="btn" id="btn-saves-clear">Delete stored in-game saves</button>
         <div class="mode-help" style="margin-top:7px;">
-          The Eden core does not expose save states to the browser yet. In-game saves live in the emulator's
-          in-memory filesystem and are lost when the page reloads.
+          The Eden core does not expose save states yet. In-game saves are copied to this browser shortly
+          after the game writes them, and restored every time a game boots, including after a crash.
         </div>
       </div>
 

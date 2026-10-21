@@ -10,6 +10,15 @@ import {
 import { setupInput } from './input.js';
 import { isArchive, openArchive } from './archive.js';
 import { CPU_CORES, activeCore, coreEnvironment, findCore, storeCore } from './cores.js';
+import {
+  restoreSaves,
+  watchSaves,
+  savePointInfo,
+  clearSaves,
+  recordCrash,
+  listCrashes,
+  clearCrashes,
+} from './recovery.js';
 
 // DOM Elements
 const canvas = document.getElementById('canvas');
@@ -53,13 +62,25 @@ let animFrameId = null;
 let currentRomName = '';
 let currentRomData = null;
 let gpuFailure = '';
+let memoryUnavailable = false;
 
 // Log widget: engine output and frontend events, newest at the bottom.
 const LOG_LIMIT = 500;
 const ANSI_ESCAPE = /\x1b\[[0-9;]*m/g;
+const recentLog = [];
 function log(text, kind = '') {
   text = String(text).replace(ANSI_ESCAPE, '');
+  // Frontend messages pass a kind; mirror them to the console, where engine output already goes.
+  if (kind === 'ui' || kind === 'err') console.info('[UI]', text);
+  recentLog.push(`${new Date().toISOString()} ${text}`);
+  if (recentLog.length > 300) recentLog.shift();
   if (/WebGPU.*(?:failed|not available)|Failed to initialize GPU/i.test(text)) gpuFailure = text;
+  // Right after a reload the browser may not have released the previous page's emulated memory
+  // yet, so the runtime cannot reserve its own. Another reload succeeds once it has.
+  if (/Failed to allocate fallback buffer/.test(text) && !memoryUnavailable) {
+    memoryUnavailable = true;
+    setTimeout(reloadForMemory, 0);
+  }
   if (!kind && /<(Error|Critical)>/.test(text)) kind = 'err';
   else if (!kind && /<Warning>/.test(text)) kind = 'warn';
   const line = document.createElement('div');
@@ -341,8 +362,9 @@ async function initWasmCoreOnce() {
     edenModule = await createEdenModule({
       locateFile: (path) => 'runtime/' + path,
       preRun: [coreEnvironment(runningCore)],
-      print: (text) => { console.log('[Eden]', text); log(text); },
-      printErr: (text) => { console.error('[Eden]', text); log(text); },
+      print: (text) => { console.log('[Eden]', text); log(text); checkCrashOutput(text); },
+      printErr: (text) => { console.error('[Eden]', text); log(text); checkCrashOutput(text); },
+      onAbort: (what) => onCrash(`runtime aborted: ${what}`),
     });
     isInitialized = true;
     wasmBadge.className = 'status-badge ready';
@@ -356,6 +378,27 @@ async function initWasmCoreOnce() {
     wasmState.textContent = 'Error: ' + err.message;
     log(`WASM init failed: ${err.message}`, 'err');
   }
+}
+
+function reloadForMemory() {
+  let attempts = 0;
+  try { attempts = Number(sessionStorage.getItem('eden-memory-reloads')) || 0; } catch {}
+  if (attempts >= 5) {
+    log('Could not reserve emulated memory after 5 reloads; close other tabs and reload.', 'err');
+    memoryUnavailable = false;
+    return false;
+  }
+  try {
+    sessionStorage.setItem('eden-memory-reloads', String(attempts + 1));
+    // Keep a pending crash restart for the next load.
+    if (resume) sessionStorage.setItem(RESUME_KEY, JSON.stringify(resume));
+  } catch {}
+  // Give the browser time to release the old memory; it does so lazily.
+  const delay = Math.min(2000 * (attempts + 1), 10_000);
+  wasmStatusText.textContent = 'Waiting for memory, reloading...';
+  log(`The previous page still holds emulated memory; reloading in ${delay / 1000} s to reserve it.`, 'ui');
+  setTimeout(() => location.reload(), delay);
+  return true;
 }
 
 const EmuState = ['Idle', 'Booting', 'Running', 'Paused', 'Failed', 'Stopped'];
@@ -391,6 +434,7 @@ function pollStatus() {
   const gameFps = finite(edenModule._eden_get_game_fps());
   // Running is reported as soon as the core starts; the game is loaded once it draws a frame.
   if (state === 2 && gameFps > 0) loader.finish();
+  watchFrames(state, gameFps);
   const speed = finite(edenModule._eden_get_emulation_speed()) * 100;
   fpsCounter.textContent = `${gameFps.toFixed(1)} FPS`;
   systemFps.textContent = `${finite(edenModule._eden_get_system_fps()).toFixed(1)} FPS`;
@@ -503,6 +547,11 @@ async function handleFile(file) {
     setRomStatus('Mounting keys & firmware...');
     const mounted = await mountSystemFiles(edenModule.FS);
     log(`Mounted ${mounted} system files into the Eden data directory.`, 'ui');
+    const restored = await restoreSaves(edenModule.FS).catch(err => {
+      log(`Could not restore in-game saves: ${err.message}`, 'err');
+      return 0;
+    });
+    if (restored) log(`Restored ${restored} in-game save files from the last save point.`, 'ui');
 
     wasmStatusText.textContent = `Reading ${rom.name}...`;
     setRomStatus(`Reading ${rom.name}...`);
@@ -533,6 +582,10 @@ async function handleFile(file) {
       throw new Error('eden_boot rejected the request');
     }
     isRomLoaded = true;
+    lastGameFile = file;
+    bootedAt = performance.now();
+    stopSaveWatch?.();
+    stopSaveWatch = watchSaves(() => edenModule?.FS, () => isRunning && !crashed, showSavePoint);
     dropZone.style.display = 'none';
     fileInput.disabled = true;
     setRomStatus(`Booting ${rom.name}. Reload the page to load a different game.`);
@@ -721,6 +774,188 @@ systemCard.addEventListener('drop', (e) => {
   importSystemFiles([...e.dataTransfer.files]);
 });
 
+// Crash recovery. When the running game breaks (the runtime aborts, a thread throws, guest code
+// faults, or frames stop), the crash is recorded for later testing and the page reloads and boots
+// the same game again from the last save point. The runtime cannot be restarted in place (a new
+// instance cannot get memory while the crashed one still holds it), so the game file is copied to
+// the origin-private file system first and the reloaded page boots from that copy. Repeated
+// crashes stop the restarts so a broken game cannot loop forever.
+const MAX_RESTARTS = 2;
+const RESTART_WINDOW_MS = 10 * 60 * 1000;
+const FREEZE_MS = 45_000;
+const RESUME_KEY = 'eden-resume';
+const RESTARTS_KEY = 'eden-restarts';
+const RESUME_DIR = 'crash-resume';
+let lastGameFile = null;
+let bootedAt = 0;
+let stopSaveWatch = null;
+let crashed = false;
+let lastFrameAt = 0;
+const autoRestart = document.getElementById('auto-restart');
+const recoveryStatus = document.getElementById('recovery-status');
+
+function readSession(key, fallback) {
+  try {
+    return JSON.parse(sessionStorage.getItem(key)) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+// The resume marker is used once; restart times survive reloads so the limit holds across them.
+const resume = readSession(RESUME_KEY, null);
+try { sessionStorage.removeItem(RESUME_KEY); } catch {}
+const restarts = readSession(RESTARTS_KEY, []).filter(time => Date.now() - time < RESTART_WINDOW_MS);
+
+const CRASH_OUTPUT = [
+  /worker sent an error!/,
+  /Aborted\(/,
+  /RuntimeError/,
+  /Core\.ARM <Critical>/,
+  /WebGPU device lost/,
+];
+
+function checkCrashOutput(text) {
+  if (!isRomLoaded || crashed) return;
+  const clean = String(text).replace(ANSI_ESCAPE, '');
+  if (CRASH_OUTPUT.some(pattern => pattern.test(clean))) onCrash(clean.slice(0, 300));
+}
+
+// Frames stopping for FREEZE_MS after the game has drawn counts as a hang.
+function watchFrames(state, gameFps) {
+  if (crashed || !isRomLoaded || state !== 2) return;
+  const now = performance.now();
+  if (gameFps > 0) {
+    if (!lastFrameAt) {
+      try { sessionStorage.removeItem('eden-memory-reloads'); } catch {}
+    }
+    lastFrameAt = now;
+  } else if (lastFrameAt && now - lastFrameAt > FREEZE_MS) {
+    onCrash(`no frames for ${Math.round((now - lastFrameAt) / 1000)} s`);
+  }
+}
+
+async function onCrash(reason) {
+  // A reload for memory is already on its way; the errors that follow are not a game crash.
+  if (crashed || !lastGameFile || memoryUnavailable) return;
+  crashed = true;
+  stopSaveWatch?.();
+  // The engine logs a backtrace right after a guest fault; include it in the report.
+  await new Promise(resolve => setTimeout(resolve, 500));
+  const version = await fetch('version.json', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+  const report = {
+    time: new Date().toISOString(),
+    reason,
+    game: currentRomName,
+    file: lastGameFile.name,
+    core: runningCore.id,
+    version,
+    uptimeSeconds: Math.round((performance.now() - bootedAt) / 1000),
+    restartsBefore: restarts.length,
+    userAgent: navigator.userAgent,
+    log: recentLog.slice(-200),
+  };
+  log(`Game crashed on ${runningCore.name}: ${reason}`, 'err');
+  await recordCrash(report).catch(err => console.warn('Could not store crash report:', err));
+  refreshCrashReports();
+
+  const hint = runningCore.id === 'jit' ? ' If it keeps happening, try the IR interpreter core.' : '';
+  if (!autoRestart.checked || restarts.length >= MAX_RESTARTS) {
+    setRomStatus(`${currentRomName} stopped working (${reason}). The crash was logged.${hint} Reload the page to start again.`);
+    recoveryStatus.textContent = restarts.length >= MAX_RESTARTS
+      ? `Stopped restarting after ${MAX_RESTARTS} crashes in 10 minutes.${hint}`
+      : 'Crashed; automatic restart is off.';
+    return;
+  }
+  recoveryStatus.textContent = `Crashed (${reason}); restarting from the last save point...`;
+  setRomStatus(`${currentRomName} stopped working. Restarting from your last save point...`);
+  try {
+    await stashGameFile(lastGameFile);
+  } catch (err) {
+    setRomStatus(`${currentRomName} stopped working and could not be restarted automatically (${err.message}). Reload the page and pick the game again.`);
+    return;
+  }
+  try {
+    sessionStorage.setItem(RESTARTS_KEY, JSON.stringify([...restarts, Date.now()]));
+    sessionStorage.setItem(RESUME_KEY, JSON.stringify({ name: lastGameFile.name, reason }));
+  } catch {}
+  // Stop the broken instance first so its threads stop touching memory the browser must free.
+  try { edenModule?._eden_shutdown(); } catch {}
+  setTimeout(() => location.reload(), 1000);
+}
+
+async function resumeDir() {
+  const root = await navigator.storage.getDirectory();
+  return root.getDirectoryHandle(RESUME_DIR, { create: true });
+}
+
+async function stashGameFile(file) {
+  const dir = await resumeDir();
+  // A file already stashed by an earlier restart is the same game; keep it.
+  const existing = await dir.getFileHandle(file.name).then(handle => handle.getFile()).catch(() => null);
+  if (existing?.size === file.size) return;
+  const writable = await (await dir.getFileHandle(file.name, { create: true })).createWritable();
+  await file.stream().pipeTo(writable);
+}
+
+async function resumeAfterCrash() {
+  if (!resume) {
+    // A normal page load: drop any game copy left from an earlier crash.
+    navigator.storage?.getDirectory?.().then(root => root.removeEntry(RESUME_DIR, { recursive: true })).catch(() => {});
+    return;
+  }
+  try {
+    const file = await (await (await resumeDir()).getFileHandle(resume.name)).getFile();
+    recoveryStatus.textContent = `Restarted after a crash (${resume.reason}).`;
+    log(`Restarting ${resume.name} after a crash (${resume.reason}).`, 'ui');
+    await handleFile(file);
+  } catch (err) {
+    setRomStatus(`Could not restart after the crash (${err.message}). Pick the game again.`);
+  }
+}
+
+function showSavePoint(meta) {
+  if (!meta) return;
+  const kb = (meta.bytes / 1024).toFixed(0);
+  document.getElementById('save-point').textContent =
+    `${meta.files} files, ${kb} KB, ${new Date(meta.time).toLocaleTimeString()}`;
+}
+
+async function refreshCrashReports() {
+  const reports = await listCrashes().catch(() => []);
+  document.getElementById('crash-count').textContent = String(reports.length);
+  document.getElementById('btn-crash-download').disabled = reports.length === 0;
+  document.getElementById('btn-crash-clear').disabled = reports.length === 0;
+}
+
+document.getElementById('btn-crash-download').addEventListener('click', async () => {
+  const reports = await listCrashes();
+  const blob = new Blob([JSON.stringify(reports, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `eden-crash-reports-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+});
+document.getElementById('btn-crash-clear').addEventListener('click', async () => {
+  await clearCrashes();
+  refreshCrashReports();
+});
+document.getElementById('btn-saves-clear').addEventListener('click', async () => {
+  if (!confirm('Delete the in-game saves stored in this browser? This cannot be undone.')) return;
+  await clearSaves();
+  document.getElementById('save-point').textContent = 'None yet';
+});
+try {
+  autoRestart.checked = localStorage.getItem('eden-auto-restart') !== 'off';
+} catch {}
+autoRestart.addEventListener('change', () => {
+  try { localStorage.setItem('eden-auto-restart', autoRestart.checked ? 'on' : 'off'); } catch {}
+});
+savePointInfo().then(showSavePoint).catch(() => {});
+refreshCrashReports();
+// For tests: simulate a crash of the running game.
+window.edenDebug = { crash: (reason = 'simulated crash') => onCrash(reason) };
+
 // Emulation widget: the CPU core is chosen before the runtime starts, so a change reloads the page.
 const runningCore = activeCore();
 const coreSelect = document.getElementById('cpu-core');
@@ -769,4 +1004,4 @@ inspectGpu();
 showVersion();
 
 // Initial boot (module scripts are deferred, so the DOM is already parsed)
-initWasmCore();
+initWasmCore().then(resumeAfterCrash);

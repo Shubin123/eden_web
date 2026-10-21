@@ -7,6 +7,7 @@
 // --static serves the local build without COOP/COEP headers, as GitHub Pages does.
 // --chrome-log prints Chrome's log, including GPU process errors, to stderr.
 // --core <id> runs on that CPU core (see web/cores.js) and checks the engine reports it.
+// --crash-at <s> simulates a crash <s> seconds after the first frame and checks the game restarts.
 //   EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip EDEN_ROM=game.nsp node tests/e2e.mjs
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -28,6 +29,7 @@ const { values: args } = parseArgs({
     static: { type: 'boolean', default: false },
     'chrome-log': { type: 'boolean', default: false },
     core: { type: 'string' },
+    'crash-at': { type: 'string' },
   },
 });
 
@@ -86,10 +88,20 @@ try {
   const page = await browser.newPage();
   await page.setViewport({ width: 1400, height: 1000 });
   let criticalLogs = 0;
-  page.on('pageerror', error => report.errors.push(`pageerror: ${error.message}`));
+  // A page that cannot reserve emulated memory (the previous page has not released it yet) logs
+  // errors and reloads itself; that recovery is expected, so its errors are counted separately.
+  let reloadingForMemory = false;
+  report.memoryReloads = 0;
+  page.on('framenavigated', frame => { if (frame === page.mainFrame()) reloadingForMemory = false; });
+  page.on('pageerror', error => { if (!reloadingForMemory) report.errors.push(`pageerror: ${error.message}`); });
   page.on('console', message => {
     const text = message.text();
     consoleLog.push(text);
+    if (text.includes('Failed to allocate fallback buffer') && !reloadingForMemory) {
+      reloadingForMemory = true;
+      report.memoryReloads++;
+    }
+    if (reloadingForMemory) return;
     if (/<Critical>|Aborted\(|RuntimeError/.test(text)) {
       criticalLogs++;
       if (report.errors.length < 50) report.errors.push(text.slice(0, 400));
@@ -150,28 +162,41 @@ try {
     const shotStages = new Set();
     while (Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, 2000));
+      // Crash recovery reloads the page; skip samples taken while it navigates.
       const sample = await page.evaluate(() => ({
         status: document.getElementById('wasm-status-text').textContent,
         state: document.getElementById('wasm-state').textContent,
         fps: parseFloat(document.getElementById('fps-counter').textContent) || 0,
         load: document.getElementById('rom-eta').hidden ? '' : document.getElementById('rom-eta').textContent,
         progress: document.getElementById('rom-progress').value,
-      }));
+      })).catch(() => null);
+      if (!sample) continue;
       sample.t = Math.round((Date.now() - bootStart) / 1000);
       report.timeline.push(sample);
       console.log(`  t=${sample.t}s ${sample.state} ${sample.fps.toFixed(1)} fps | ${sample.load}`);
       for (const stage of ['Reading', 'Booting', 'Loaded']) {
         if (sample.load.startsWith(stage) && !shotStages.has(stage)) {
           shotStages.add(stage);
-          await page.screenshot({ path: path.join(artifacts, `e2e-${stamp}-load-${stage.toLowerCase()}.png`) });
+          await page.screenshot({ path: path.join(artifacts, `e2e-${stamp}-load-${stage.toLowerCase()}.png`) }).catch(() => {});
         }
       }
       if (sample.state === 'Failed') break;
+      if (args['crash-at'] && !report.crashInjectedAt) {
+        const firstDrawn = report.timeline.find(entry => entry.fps > 0);
+        if (firstDrawn && sample.t >= firstDrawn.t + Number(args['crash-at'])) {
+          // The crash handler reloads the page, which can cut this call short.
+          await page.evaluate(() => window.edenDebug.crash('e2e simulated crash')).catch(() => {});
+          report.crashInjectedAt = sample.t;
+          console.log(`  simulated a crash at t=${sample.t}s`);
+        }
+      }
       if (sample.t >= 10 * (shot + 1)) {
-        await page.screenshot({ path: path.join(artifacts, `e2e-${stamp}-${shot}.png`) });
+        await page.screenshot({ path: path.join(artifacts, `e2e-${stamp}-${shot}.png`) }).catch(() => {});
         // A blank or single-colour canvas compresses to a few KB; a rendered game frame does not.
-        const frame = await (await page.$('#canvas')).screenshot({ path: path.join(artifacts, `e2e-${stamp}-${shot}-canvas.png`) });
-        report.frames.push({ t: sample.t, bytes: frame.length });
+        const frame = await page.$('#canvas')
+          .then(element => element.screenshot({ path: path.join(artifacts, `e2e-${stamp}-${shot}-canvas.png`) }))
+          .catch(() => null);
+        if (frame) report.frames.push({ t: sample.t, bytes: frame.length });
         shot++;
       }
     }
@@ -179,6 +204,18 @@ try {
     if (core) {
       const reported = consoleLog.find(line => line.includes('CPU core: ') && line.includes('Frontend'));
       check('engine uses selected core', reported?.includes(`CPU core: ${core.name}`), reported?.replace(/.*CPU core: /, '').replace(/\x1b\[[0-9;]*m/g, '') ?? 'not logged');
+    }
+    if (args['crash-at']) {
+      const after = report.timeline.filter(sample => report.crashInjectedAt && sample.t > report.crashInjectedAt);
+      check('crash simulated', Boolean(report.crashInjectedAt), report.crashInjectedAt ? `t=${report.crashInjectedAt}s` : 'game never drew a frame');
+      check('crash report stored', await page.$eval('#crash-count', el => Number(el.textContent) > 0));
+      check('game restarted', consoleLog.some(line => line.includes('CPU core:')) &&
+        (await page.$eval('#recovery-status', el => el.textContent)).startsWith('Restarted'),
+        await page.$eval('#recovery-status', el => el.textContent));
+      check('frames after restart', after.some(sample => sample.fps > 0), `${after.filter(sample => sample.fps > 0).length} samples with frames`);
+      report.savePoint = await page.$eval('#save-point', el => el.textContent);
+      console.log(`  memory reloads: ${report.memoryReloads}`);
+      console.log(`  save point: ${report.savePoint}`);
     }
     const running = report.timeline.find(sample => sample.state === 'Running');
     const firstFrame = report.timeline.find(sample => sample.fps > 0);

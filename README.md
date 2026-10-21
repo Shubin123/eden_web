@@ -60,6 +60,25 @@ installed). `?core=interpreter` in the URL overrides the stored choice for one l
 `npm run test:e2e -- --core <id>` checks that the engine really runs the selected core. Cores are
 defined in `web/cores.js`; add one there only after it has been tested, with its results.
 
+## Crash recovery and in-game saves
+
+- **In-game saves persist.** The page copies the game's save folders to IndexedDB shortly after
+  the game writes them (once they have stopped changing, so a half-written save is never
+  captured) and restores them every time a game boots. The **Save States** widget shows the
+  latest save point and can delete it.
+- **Crashes restart the game.** If the runtime aborts, a thread throws, guest code faults (as a
+  JIT bug does) or frames stop for 45 s, the page records a crash report, keeps a copy of the
+  game file in the origin-private file system, reloads, and boots the game again from the last
+  save point. After 2 crashes in 10 minutes it stops and suggests the IR interpreter core.
+  Automatic restart can be turned off in the **Emulation** widget.
+- **Crash reports** (reason, game, core, versions, recent log) stay in the browser; download them
+  from the Emulation widget to reproduce a crash with the headless runner.
+- Right after a reload the browser may still hold the previous page's emulated memory; the page
+  notices and reloads again after a short wait.
+
+`npm run test:e2e -- --crash-at 20` simulates a crash 20 s after the first frame and checks that
+the report is stored and the game restarts and draws again.
+
 ## Versioning
 
 Every build names exactly what it runs, in the **WebAssembly → Version** row of the page and in the
