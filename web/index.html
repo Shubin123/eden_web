@@ -154,17 +154,26 @@
       </div>
 
       <div class="card" id="emulation-card" data-widget="emulation"
-           data-settings="CPU core (Wasm JIT or IR interpreter) with the benefits, downsides and tested games of each">
+           data-settings="emulation core (Eden's Wasm JIT or IR interpreter, and other Switch emulators) with the benefits, downsides, tested games and credits of each">
         <h2>⚙️ Emulation</h2>
-        <label for="cpu-core" class="mode-help field-label">CPU core</label>
-        <select id="cpu-core" class="renderer-select" aria-label="CPU core"></select>
+        <label for="cpu-core" class="mode-help field-label">Emulation core</label>
+        <select id="cpu-core" class="renderer-select" aria-label="Emulation core"></select>
         <p id="cpu-core-summary" class="mode-help"></p>
         <div class="core-tradeoffs">
           <div><h3>Benefits</h3><ul id="cpu-core-pros" class="core-list"></ul></div>
           <div><h3>Downsides</h3><ul id="cpu-core-cons" class="core-list"></ul></div>
         </div>
-        <h3>Tested games</h3>
-        <ul id="cpu-core-tested" class="core-list core-tested"></ul>
+        <div id="cpu-core-tested-section">
+          <h3>Tested games</h3>
+          <ul id="cpu-core-tested" class="core-list core-tested"></ul>
+        </div>
+        <div id="cpu-core-port-section" hidden>
+          <h3>Browser port</h3>
+          <p id="cpu-core-port" class="mode-help"></p>
+        </div>
+        <h3>Credits</h3>
+        <p id="cpu-core-credits" class="mode-help core-credits"></p>
+        <p id="cpu-core-links" class="mode-help core-links"></p>
         <div class="stat-row"><span class="label">Running</span><span id="cpu-core-active" class="value">--</span></div>
         <button class="btn" id="cpu-core-apply" hidden>Reload to switch core</button>
         <p class="mode-help">The core is fixed once the runtime starts, so switching reloads the page. Keys and firmware stay installed.</p>
@@ -175,7 +184,7 @@
         </label>
         <p id="recovery-status" class="mode-help">No crashes this session.</p>
         <div class="stat-row"><span class="label">Crash reports</span><span id="crash-count" class="value">0</span></div>
-        <div class="save-toolbar">
+        <div class="core-actions">
           <button class="btn" id="btn-crash-download" disabled>Download reports</button>
           <button class="btn" id="btn-crash-clear" disabled>Clear</button>
         </div>

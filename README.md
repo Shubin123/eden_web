@@ -48,7 +48,9 @@ Reports and screenshots are written to `artifacts/`.
 ## Emulation cores
 
 The **Emulation** widget picks the CPU core guest code runs on and lists each core's benefits,
-downsides and tested games:
+downsides, tested games and credits. It also lists the other Switch emulators (Ryujinx Canary /
+Ryubing, Kenji-NX, Citron, Sudachi, MeloNX, Hydra, Strato) with their status and what a browser
+port would take; only Eden is built for WebAssembly, so only its cores can be selected to run:
 
 | Core | Use it for | Trade-off |
 |---|---|---|
@@ -78,6 +80,22 @@ defined in `web/cores.js`; add one there only after it has been tested, with its
 
 `npm run test:e2e -- --crash-at 20` simulates a crash 20 s after the first frame and checks that
 the report is stored and the game restarts and draws again.
+
+## Credits
+
+This project stands on the work of many people:
+
+- **Eden** by the Eden Emulator Project, continuing the **yuzu** Emulator Project.
+- **dynarmic**, the ARM-to-IR CPU translator, by MerryMage and contributors.
+- **WebAssembly port**, Wasm JIT, WebGPU renderer and this frontend by Shubin123.
+- **libarchive** (Tim Kientzle and contributors), **xz/liblzma** (Lasse Collin and the Tukaani
+  Project), **zstd** (Yann Collet and Meta), **zlib** (Jean-loup Gailly and Mark Adler) and
+  **bzip2** (Julian Seward), which the archive decoder is built from.
+- **Emscripten** and its contributors, which make the WebAssembly build possible.
+- The other emulators in the Emulation widget are credited there: Ryujinx (gdkchan and the
+  Ryujinx team), Ryubing (GreemDev and contributors), Kenji-NX (KeatonTheBot and others), Citron
+  (Zephyron), Sudachi (Jarrod Norwell), MeloNX (Stossy11), Hydra (SamoZ256) and Strato (the
+  Strato team, continuing Skyline).
 
 ## Versioning
 

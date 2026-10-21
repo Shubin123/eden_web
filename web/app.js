@@ -878,8 +878,8 @@ async function onCrash(reason) {
     sessionStorage.setItem(RESTARTS_KEY, JSON.stringify([...restarts, Date.now()]));
     sessionStorage.setItem(RESUME_KEY, JSON.stringify({ name: lastGameFile.name, reason }));
   } catch {}
-  // Stop the broken instance first so its threads stop touching memory the browser must free.
-  try { edenModule?._eden_shutdown(); } catch {}
+  // Don't call into the crashed runtime here: a thread that died holding a lock would block this
+  // thread. The reload discards the instance.
   setTimeout(() => location.reload(), 1000);
 }
 
@@ -974,23 +974,43 @@ function showCore(core) {
   document.getElementById('cpu-core-summary').textContent = core.summary;
   fillList('cpu-core-pros', core.pros);
   fillList('cpu-core-cons', core.cons);
-  fillList('cpu-core-tested', core.tested, ({ game, result }) => {
+  fillList('cpu-core-tested', core.tested ?? [], ({ game, result }) => {
     const name = document.createElement('strong');
     name.textContent = game;
     return [name, document.createTextNode(`: ${result}`)];
   });
+  document.getElementById('cpu-core-tested-section').hidden = !core.available;
+  document.getElementById('cpu-core-port-section').hidden = core.available;
+  document.getElementById('cpu-core-port').textContent = core.browser ?? '';
+  document.getElementById('cpu-core-credits').textContent = core.credits;
+  document.getElementById('cpu-core-links').replaceChildren(...core.links.map(href => {
+    const link = document.createElement('a');
+    link.href = href;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = new URL(href).host + new URL(href).pathname.replace(/\/$/, '');
+    return link;
+  }));
   coreApply.hidden = core.id === runningCore.id;
-  coreApply.textContent = `Reload to switch to ${core.name}`;
+  coreApply.disabled = !core.available;
+  coreApply.textContent = core.available ? `Reload to switch to ${core.name}` : 'Not available in the browser';
 }
 
-for (const core of CPU_CORES) {
-  coreSelect.append(new Option(core.name, core.id));
+// Runnable cores first; the other emulators are listed for comparison and credit.
+for (const [label, available] of [['Eden: runs in this browser', true], ['Other Switch emulators: not available here', false]]) {
+  const group = document.createElement('optgroup');
+  group.label = label;
+  for (const core of CPU_CORES.filter(c => c.available === available)) {
+    group.append(new Option(core.name, core.id));
+  }
+  coreSelect.append(group);
 }
 coreSelect.value = runningCore.id;
 document.getElementById('cpu-core-active').textContent = runningCore.name;
 showCore(runningCore);
 coreSelect.addEventListener('change', () => showCore(findCore(coreSelect.value)));
 coreApply.addEventListener('click', () => {
+  if (!findCore(coreSelect.value)?.available) return;
   if (isRomLoaded && !confirm('Switching the CPU core reloads the page and stops the running game. Continue?')) return;
   storeCore(coreSelect.value);
   const url = new URL(location.href);

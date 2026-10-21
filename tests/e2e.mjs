@@ -114,8 +114,9 @@ try {
   });
 
   const loadStart = Date.now();
-  const core = args.core && CPU_CORES.find(c => c.id === args.core);
-  if (args.core && !core) throw new Error(`unknown core ${args.core}; one of ${CPU_CORES.map(c => c.id).join(', ')}`);
+  const runnable = CPU_CORES.filter(c => c.available);
+  const core = args.core && runnable.find(c => c.id === args.core);
+  if (args.core && !core) throw new Error(`core ${args.core} does not run here; one of ${runnable.map(c => c.id).join(', ')}`);
   const pageUrl = new URL(url);
   if (core) pageUrl.searchParams.set('core', core.id);
   report.core = core?.id ?? 'default';

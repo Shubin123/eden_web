@@ -575,3 +575,10 @@ kbd {
 .core-list { margin: 0; padding-left: 16px; font-size: 0.74rem; color: #c8cfdc; line-height: 1.4; }
 .core-tested li strong { color: #e6eaf2; font-weight: 600; }
 #cpu-core-apply { margin-top: 6px; width: 100%; }
+.core-credits { color: #c8cfdc; }
+.core-links a { color: #8fb8ff; overflow-wrap: anywhere; }
+.core-links a + a::before { content: ' · '; color: #888; }
+/* .btn sets display, which would otherwise override the hidden attribute. */
+.btn[hidden] { display: none; }
+.core-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.core-actions .btn { flex: 1 1 auto; white-space: nowrap; }
