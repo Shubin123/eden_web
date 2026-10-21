@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Compatibility widget: a local database of how each game ran on each core and runtime build.
 //
-// Every play session records an 'automated' result once the game has run for an observation
-// window, or earlier if it fails; the user can add their own rating. Results use the shared format
+// Every play session records an 'automated' result once the game has played for a while after
+// its first frame, or earlier if it fails; the user can add their own rating. Results use the shared format
 // in results.js, so files from tests/e2e.mjs and tests/matrix.mjs import directly and an export
 // can be read by the test harness. Games are identified by title ID and version when the runtime
-// reports them, else by file name and a hash of the size; paths and file contents are never stored.
+// or the file name gives them, else by file name and a hash of the size; paths and file contents are never stored.
 //
 // The functions above setupCompatibility() are pure and tested in tests/compat.mjs.
 
@@ -17,7 +17,10 @@ const DB_VERSION = 1;
 const RESULTS = 'results';
 const LAST_SESSION_KEY = 'eden-compat-last';
 
-export const OBSERVE_MS = 60_000;
+// A session is judged on this much play after its first frame, or as failed if no frame comes
+// within the boot limit. Boot times vary too much (15-60 s) for one window from boot to fit all.
+export const PLAY_MS = 45_000;
+export const BOOT_LIMIT_MS = 180_000;
 const CHECKPOINT_MS = 15_000;
 const POLL_MS = 500;
 // Frames stopping this long during the window counts as a hang.
@@ -64,11 +67,27 @@ export function fnv1a(text) {
   return hash.toString(16).padStart(8, '0');
 }
 
+/// Title ID, version and name from the common dump naming "Name [0100...][v65536].nsp".
+export function parseFileName(fileName) {
+  const name = baseName(fileName);
+  const titleId = name.match(/\[([0-9A-F]{16})\]/i)?.[1]?.toUpperCase() ?? null;
+  const version = name.match(/\[v(\d+)\]/i)?.[1];
+  const title = name.replace(/\.[^.]+$/, '').replace(/\s*[[(][^\])]*[\])]/g, '').trim();
+  return { titleId, version: version == null ? null : Number(version), name: title || name };
+}
+
 /// The `game` field of a result, from what the runtime reports and the file name and size.
 export function gameIdentity({ info = null, fileName = '', size = -1 } = {}) {
   const file = fileName ? { name: baseName(fileName), sizeHash: fnv1a(size) } : null;
-  const titleId = /^[0-9A-F]{16}$/i.test(info?.titleId ?? '') ? info.titleId.toUpperCase() : null;
-  const game = { titleId, name: info?.name || file?.name || 'Unknown game', version: info?.version ?? null, displayVersion: info?.displayVersion ?? null };
+  const fromName = fileName ? parseFileName(fileName) : {};
+  const reported = /^[0-9A-F]{16}$/i.test(info?.titleId ?? '') ? info.titleId.toUpperCase() : null;
+  const titleId = reported ?? fromName.titleId ?? null;
+  const game = {
+    titleId,
+    name: info?.name || fromName.name || 'Unknown game',
+    version: info?.version ?? (reported ? null : fromName.version) ?? null,
+    displayVersion: info?.displayVersion ?? null,
+  };
   if (file) game.file = file;
   return game;
 }
@@ -424,6 +443,9 @@ export function setupCompatibility({ log = () => {} } = {}) {
     build: runtimeInfo ? { web: runtimeInfo.webRevision, build: runtimeInfo.build, version: runtimeInfo.version, local: runtimeInfo.local } : null,
   });
 
+  // What a rating applies to: the game playing now, else the last one played in this browser.
+  const reportTarget = () => (session ? { game: session.game, core: coreField(session.core) } : readLast());
+
   for (const rating of USER_RATINGS) {
     ratingSelect.append(new Option(`${rating.label}: ${rating.help}`, rating.id));
   }
@@ -454,7 +476,7 @@ export function setupCompatibility({ log = () => {} } = {}) {
     const list = $('compat-results');
     const coverage = $('compat-coverage');
     if (!group) {
-      recommendation.textContent = 'No results yet. Play a game for a minute to record one, or import results.';
+      recommendation.textContent = 'No results yet. Play a game to record one, or import results.';
       warnings.hidden = true;
       list.replaceChildren();
       coverage.textContent = '';
@@ -501,7 +523,7 @@ export function setupCompatibility({ log = () => {} } = {}) {
     }
     hint.hidden = !group;
 
-    const target = session ?? readLast();
+    const target = reportTarget();
     reportButton.disabled = !target;
     $('compat-report-target').textContent = target
       ? `Rate ${gameLabel(target.game)} on ${coreName(target.core.id)} (engine ${shortRuntime(target.core.runtimeVersion)}).`
@@ -534,8 +556,8 @@ export function setupCompatibility({ log = () => {} } = {}) {
     render();
   });
 
-  reportButton.addEventListener('click', () => {
-    const target = session ?? readLast();
+  reportButton.addEventListener('click', async () => {
+    const target = reportTarget();
     const rating = USER_RATINGS.find(r => r.id === ratingSelect.value);
     if (!target || !rating) return;
     const note = $('compat-note').value.trim();
@@ -544,7 +566,7 @@ export function setupCompatibility({ log = () => {} } = {}) {
       confidence: 'user',
       game: target.game,
       core: target.core,
-      environment: target.environment ?? null,
+      environment: await environment,
       scenario: { name: 'user-report' },
       outcome: rating.outcome,
       failure: rating.category ? { category: rating.category, detail: `rated ${rating.label}` } : null,
@@ -647,9 +669,10 @@ export function setupCompatibility({ log = () => {} } = {}) {
         this.firstFrameAt ??= now;
         this.lastFrameAt = now;
       }
-      if (state >= 2 && !this.game.titleId) {
+      if (state >= 2 && !this.infoRead) {
         const info = readGameInfo(this.module);
         if (info) {
+          this.infoRead = true;
           this.game = gameIdentity({ info, fileName: this.fileName, size: this.size });
           this.remember();
         }
@@ -659,7 +682,7 @@ export function setupCompatibility({ log = () => {} } = {}) {
         this.failed = true;
         this.loadResult = this.module._eden_get_load_result?.();
         this.finish();
-      } else if (now - this.bootAt >= OBSERVE_MS) {
+      } else if (this.firstFrameAt != null ? now - this.firstFrameAt >= PLAY_MS : now - this.bootAt >= BOOT_LIMIT_MS) {
         this.finish();
       } else if (this.firstFrameAt != null && now - this.savedAt >= CHECKPOINT_MS) {
         this.record();
@@ -691,7 +714,7 @@ export function setupCompatibility({ log = () => {} } = {}) {
         core: coreField(this.core),
         environment: await environment,
         scenario: { name: 'browser-session', seconds: Math.round((now - this.bootAt) / 1000), warm: false,
-          settings: { observeSeconds: OBSERVE_MS / 1000, minPlayableFps: MIN_PLAYABLE_FPS } },
+          settings: { playSeconds: PLAY_MS / 1000, bootLimitSeconds: BOOT_LIMIT_MS / 1000, minPlayableFps: MIN_PLAYABLE_FPS } },
         ...assessment,
         metrics: {
           coreReadyMs,

@@ -4,8 +4,8 @@
 import assert from 'node:assert/strict';
 import { makeResult } from '../web/results.js';
 import {
-  assessSession, findRegressions, gameIdentity, gameKey, groupByGame, parseImport, recommend, sameGame,
-  sustainedFps,
+  assessSession, findRegressions, gameIdentity, gameKey, groupByGame, parseFileName, parseImport, recommend,
+  sameGame, sustainedFps,
 } from '../web/compat.js';
 
 // Game identity: title ID and version when known, else base name and a hash of the size.
@@ -15,6 +15,11 @@ assert.ok(!JSON.stringify(byFile).includes('/home'), 'no path stored');
 assert.match(gameKey(byFile), /^file:captain toad\.nsp:[0-9a-f]{8}$/);
 assert.notEqual(gameKey(byFile), gameKey(gameIdentity({ fileName: 'Captain Toad.nsp', size: 1235 })));
 assert.equal(gameKey(byFile), gameKey(gameIdentity({ fileName: 'C:\\roms\\Captain Toad.nsp', size: 1234 })));
+// Dumps named "Name [TitleID][vN]" identify themselves before the runtime reports anything.
+const named = gameIdentity({ fileName: '/x/Captain Toad Treasure Tracker [01009BF0072D4000][v0].nsp', size: 5 });
+assert.deepEqual([named.titleId, named.version, named.name], ['01009BF0072D4000', 0, 'Captain Toad Treasure Tracker']);
+assert.equal(gameKey(named), 'title:01009BF0072D4000:0');
+assert.deepEqual(parseFileName('Game (USA).xci'), { titleId: null, version: null, name: 'Game' });
 const info = { titleId: '01009bf0072d4000', name: 'Captain Toad', version: 65536, displayVersion: '1.1.0' };
 const byTitle = gameIdentity({ info, fileName: 'Captain Toad.nsp', size: 1234 });
 assert.equal(byTitle.titleId, '01009BF0072D4000');
