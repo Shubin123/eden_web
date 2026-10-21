@@ -85,3 +85,28 @@ restoration, scaling, system-file import, game boot, pause, resume, volume, mute
 and controller press/release forwarding. The screenshot remains black: this is
 not a claim of visible gameplay. The longer `silksong-final/` run checks that
 separately.
+
+## Extended game result and release validation
+
+- The corrected build's extended `silksong-final/` run failed. It reached Running
+  at about 10 s, first frame activity at 54 s, and a peak of 43.5 FPS. All captured
+  canvas images remained black. At about 93 s a worker raised a C++ exception.
+- The emitted stack resolves through `operator new`, vector byte-buffer growth,
+  `RegionCompiler::Compile`, `CompileRegion`, `BuildRegion` and `RunRegion` in the
+  Wasm JIT. This establishes an allocation failure during JIT region compilation;
+  it does not establish why that allocation failed. The archive had already been
+  fully decoded and mounted. This game is **not verified playable**.
+- Recovery did not restore a responsive page after this native failure. The test
+  browser was closed after the crash and observation deadline; the harness wrote
+  a failed report and result file. Neither that shutdown nor black frames are
+  counted as successful gameplay.
+- The release engine build completed from clean engine main `57e2a3a654`.
+  Installed all four runtime artifacts with the default `npm run sync`.
+  `artifacts/widget-core/engine-release-build.log` contains the complete build log.
+- `npm test` passes against that release runtime. The release-only widget run
+  (`widgets-release.log`) passes all eight checks without game inputs. The prior
+  game/widget run (`widgets-validated.log`) passed all 16 interaction checks with
+  the supplied 7z and no browser errors, including actual output gain and mute.
+- Remaining work: JIT allocation failure and black rendering in Silksong,
+  recovery after that failure, fullscreen verification, frame-step API, emulator
+  save-state serialization and browser Local Play transport.
