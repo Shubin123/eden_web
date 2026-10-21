@@ -45,6 +45,26 @@ EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip EDEN_ROM=game.nsp npm run test:e2e
 ```
 Reports and screenshots are written to `artifacts/`.
 
+### Regression lab
+
+Every e2e run also writes a result in the shared format of `web/results.js`
+(`artifacts/e2e-<time>.result.json`): outcome, failure category (environment, artifact, init,
+system-files, boot, crash, hang, no-frames, performance), browser and GPU, core and runtime
+revision, game (title ID and file name only, never a path) and frame-time statistics (p50/p95/p99,
+stutters) over the steady state after `--warmup` seconds. Frame times come from the engine's
+`eden_get_frame_times` when the runtime exports it, otherwise from canvas updates or
+`requestAnimationFrame`.
+```bash
+npm run test:e2e -- --headful --core jit --repeat 3      # one cold start, two warm starts, with median and range
+EDEN_ROMS="a.nsp:b.nsp" npm run test:matrix -- --headful                     # cores x games, parallel (--jobs)
+EDEN_ROMS="a.nsp" npm run test:matrix -- --mode bench --headful --seconds 120 # one job at a time, 3 repeats
+npm run compare -- artifacts/matrix-<old> artifacts/matrix-<new>              # exit 1 on regressions
+```
+The matrix writes `matrix.json` (a result set) and a table; cores that are not available are
+reported as unsupported, not failed. `compare` matches runs by game, core, scenario and cold/warm
+start; a pass turning into a failure, a failure at an earlier stage, or a metric moving the wrong
+way by more than the spread of the repeats (at least 10%) counts as a regression.
+
 ## Emulation cores
 
 The **Emulation core** widget picks the CPU core guest code runs on and lists each core's benefits,
