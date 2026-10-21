@@ -192,6 +192,9 @@ try {
   check('no page errors', report.errors.filter(error => error.startsWith('pageerror')).length === 0);
   check('no failed requests', report.errors.filter(error => /^(requestfailed|HTTP)/.test(error)).length === 0);
   await page.screenshot({ path: path.join(artifacts, `e2e-${stamp}-final.png`) });
+} catch (err) {
+  // An exception mid-run must fail the run, not end it with only the checks made so far.
+  check('run completed', false, err.message);
 } finally {
   await browser.close();
   server?.close();
