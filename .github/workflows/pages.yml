@@ -6,6 +6,7 @@ on:
     paths:
       - "web/**"
       - "tests/web_artifact_smoke.cjs"
+      - "scripts/verify-deploy.mjs"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -72,3 +73,6 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+      # Fails the run if the live site is missing a widget, module or runtime file from this commit.
+      - name: Verify deployment
+        run: node scripts/verify-deploy.mjs "${{ steps.deployment.outputs.page_url }}" "$GITHUB_SHA"
