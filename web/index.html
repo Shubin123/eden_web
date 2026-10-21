@@ -348,6 +348,24 @@
         <div class="stat-row"><span class="label">Threads</span><span id="hw-threads" class="value">--</span></div>
       </div>
 
+      <div class="card" id="diagnostics-card" data-widget="diagnostics" data-default-span="2"
+           data-settings="browser check, build and launch status; download a diagnostic bundle or copy an issue summary">
+        <h2>🩺 Diagnostics</h2>
+        <div class="stat-row"><span class="label">Launch stage</span><span id="diag-stage" class="value">Checking browser</span></div>
+        <div id="diag-failure" class="diag-failure" aria-live="polite" hidden></div>
+        <h3>Browser check</h3>
+        <ul id="diag-checks" class="diag-checks"><li class="mode-help">Checking...</li></ul>
+        <h3>Build</h3>
+        <div id="diag-build"></div>
+        <div class="stat-row"><span class="label">Page errors</span><span id="diag-errors" class="value">0 frontend · 0 engine</span></div>
+        <div class="core-actions">
+          <button type="button" class="btn btn-secondary" id="btn-diag-bundle">Download diagnostic bundle</button>
+          <button type="button" class="btn btn-secondary" id="btn-diag-summary">Copy summary</button>
+          <button type="button" class="btn btn-secondary" id="btn-diag-persist" hidden>Keep storage</button>
+        </div>
+        <p class="mode-help">The bundle holds the browser check, versions, launch status and recent log. It never includes keys, firmware, game data, saves or file paths.</p>
+      </div>
+
       <div class="card" data-widget="log" data-default-span="2"
            data-settings="engine output; copy or clear it">
         <h2>📋 Log</h2>

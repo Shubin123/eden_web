@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node scripts/server.mjs",
     "sync": "node scripts/sync-runtime.mjs",
-    "test": "node tests/web_artifact_smoke.cjs && node tests/zip_reader.mjs && node tests/archive_reader.mjs && node tests/results.mjs && node tests/compat.mjs && node tests/compare_results.mjs",
+    "test": "node tests/web_artifact_smoke.cjs && node tests/zip_reader.mjs && node tests/archive_reader.mjs && node tests/results.mjs && node tests/compat.mjs && node tests/compare_results.mjs && node tests/diagnostics.mjs",
     "test:e2e": "node tests/e2e.mjs",
     "test:matrix": "node tests/matrix.mjs",
     "compare": "node scripts/compare-results.mjs",
