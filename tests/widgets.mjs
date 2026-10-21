@@ -59,6 +59,85 @@ try {
   });
   check('ROM block file works through real engine FS', fileCheck);
 
+  if (caps.operations.includes('browserRom')) {
+    const rejects = await page.evaluate(async () => {
+      const { mountBrowserRom } = await import('./browser-rom.js');
+      const module = window.__edenLab.module;
+      const errors = [];
+      for (const stream of [
+        async () => { throw new Error('fixture decoder failed'); },
+        async () => new Blob([new Uint8Array([1, 2])]).stream(),
+      ]) {
+        try {
+          await mountBrowserRom(module, '/roms/broken.nsp', { name: 'broken.nsp', size: 3, stream }, () => {});
+          return false;
+        } catch (error) { errors.push(error.message); }
+      }
+      return errors[0] === 'fixture decoder failed' && errors[1].includes('truncated');
+    });
+    check('archive cache rejects decoder errors and truncated ROMs', rejects);
+    const reads = await page.evaluate(async () => {
+      const { mountBrowserRom } = await import('./browser-rom.js');
+      const m = window.__edenLab.module;
+      const bytes = Uint8Array.from({ length: 4 * 1024 * 1024 + 17 }, (_, i) => i % 251);
+      const file = new File([bytes], 'fixture.nsp');
+      const results = [];
+      for (const archived of [false, true]) {
+        const rom = { name: file.name, size: file.size, stream: async () => file.stream(),
+          ...(archived ? {} : { file }) };
+        const mounted = await mountBrowserRom(m, '/roms/fixture.nsp', rom, () => {});
+        try {
+          const control = new Int32Array(m.HEAPF64.buffer, Number(m._eden_get_rom_io_control()), 6);
+          const position = new BigUint64Array(m.HEAPF64.buffer, Number(m._eden_get_rom_io_control()) + 16, 1);
+          const output = new Uint8Array(m.HEAPF64.buffer, Number(m._eden_get_rom_io_buffer()), m._eden_get_rom_io_buffer_size());
+          for (const [offset, length] of [[0, 27], [4 * 1024 * 1024 - 5, 22], [file.size, 16]]) {
+            position[0] = BigInt(offset);
+            control[1] = length;
+            Atomics.store(control, 0, 1);
+            Atomics.notify(control, 0);
+            const deadline = performance.now() + 5000;
+            while (Atomics.load(control, 0) === 1 && performance.now() < deadline) await new Promise(r => setTimeout(r, 1));
+            const count = control[2];
+            if (Atomics.load(control, 0) !== 2 || count !== Math.min(length, file.size - offset)) return false;
+            if (!output.subarray(0, count).every((v, i) => v === bytes[offset + i])) return false;
+            Atomics.store(control, 0, 0);
+          }
+          results.push(mounted.bytes === file.size);
+        } finally { mounted.close(); }
+      }
+      return results.every(Boolean);
+    });
+    check('raw and archived ROM mailbox reads, boundaries and EOF', reads);
+    const largeOffset = await page.evaluate(async () => {
+      const { mountBrowserRom } = await import('./browser-rom.js');
+      const directory = await (await navigator.storage.getDirectory()).getDirectoryHandle('rom-cache', { create: true });
+      const handle = await directory.getFileHandle('offset-fixture', { create: true });
+      const writer = await handle.createWritable();
+      const offset = 2 ** 32 + 7;
+      await writer.seek(offset);
+      await writer.write(new Uint8Array([8, 9, 2]));
+      await writer.close();
+      const file = await handle.getFile();
+      const m = window.__edenLab.module;
+      const mounted = await mountBrowserRom(m, '/roms/large-fixture.nsp', { file }, () => {});
+      try {
+        const control = new Int32Array(m.HEAPF64.buffer, Number(m._eden_get_rom_io_control()), 6);
+        new BigUint64Array(m.HEAPF64.buffer, Number(m._eden_get_rom_io_control()) + 16, 1)[0] = BigInt(offset);
+        control[1] = 3;
+        Atomics.store(control, 0, 1);
+        Atomics.notify(control, 0);
+        const deadline = performance.now() + 5000;
+        while (Atomics.load(control, 0) === 1 && performance.now() < deadline) await new Promise(r => setTimeout(r, 1));
+        const bytes = new Uint8Array(m.HEAPF64.buffer, Number(m._eden_get_rom_io_buffer()), 3);
+        return Atomics.load(control, 0) === 2 && control[2] === 3 && bytes.join(',') === '8,9,2';
+      } finally {
+        mounted.close();
+        await directory.removeEntry('offset-fixture');
+      }
+    });
+    check('ROM mailbox preserves offsets above 4 GB', largeOffset);
+  }
+
   const saves = await page.evaluate(async () => {
     const { watchSaves, restoreSaves, clearSaves, savePointInfo } = await import('./recovery.js');
     const { EDEN_DATA_ROOT } = await import('./system-files.js');
@@ -85,6 +164,20 @@ try {
 
   await page.select('#screen-filter', 'pixelated');
   check('renderer scaling setting applies', await page.$eval('#screen-stage', e => e.classList.contains('is-pixelated')));
+  await page.click('#btn-fullscreen-stage');
+  await page.waitForFunction(() => document.fullscreenElement?.id === 'screen-stage');
+  check('fullscreen button enters native fullscreen', true);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.fullscreenElement);
+  check('Escape leaves fullscreen', true);
+  await page.keyboard.down('Alt');
+  await page.keyboard.press('Enter');
+  await page.keyboard.up('Alt');
+  await page.waitForFunction(() => document.fullscreenElement?.id === 'screen-stage');
+  check('Alt+Enter enters fullscreen', true);
+  await page.click('#btn-fullscreen-exit');
+  await page.waitForFunction(() => !document.fullscreenElement);
+  check('exit button leaves fullscreen', true);
   const game = process.env.EDEN_ROM;
   if (game) {
     for (const [selector, file] of [['#keys-input', process.env.EDEN_KEYS], ['#firmware-input', process.env.EDEN_FIRMWARE]]) {
@@ -126,6 +219,14 @@ try {
     check('keyboard sends press and release to core', await page.evaluate(() =>
       inputCalls.some(c => c[1] === 10 && c[2] === 1) && inputCalls.some(c => c[1] === 10 && c[2] === 0)));
     await page.screenshot({ path: path.join(artifacts, 'game.png') });
+    await page.$eval('#auto-restart', e => { e.checked = false; });
+    await page.evaluate(() => window.edenDebug.crash('widget crash-state check'));
+    await page.waitForFunction(() => document.querySelector('#recovery-status').textContent.startsWith('Crashed;'));
+    check('crash clears live performance state', await page.$eval('#wasm-state', e => e.textContent) === 'Crashed' &&
+      await page.$eval('#fps-counter', e => e.textContent) === '--');
+    check('crash disables emulation controls', await page.$eval('#btn-play', e => e.disabled) &&
+      await page.$eval('#btn-pause', e => e.disabled) && await page.$eval('#btn-fullscreen-pause', e => e.disabled));
+    check('crash report persisted', Number(await page.$eval('#crash-count', e => e.textContent)) === 1);
   }
   check('no browser errors', !report.errors?.length, report.errors?.[0]);
 } catch (error) {

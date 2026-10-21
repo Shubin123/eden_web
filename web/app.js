@@ -9,7 +9,9 @@ import {
 } from './system-files.js';
 import { setupInput } from './input.js';
 import { mountRom } from './rom-file.js';
+import { mountBrowserRom } from './browser-rom.js';
 import { setupAudio } from './audio.js';
+import { createFrameWatchdog } from './frame-watchdog.js';
 import { isArchive, openArchive } from './archive.js';
 import { CPU_CORES, activeCore, coreEnvironment, findCore, storeCore } from './cores.js';
 import {
@@ -69,6 +71,7 @@ let gpuFailure = '';
 let memoryUnavailable = false;
 let loadingRom = false;
 let crashed = false;
+let browserRom = null;
 
 // Log widget: engine output and frontend events, newest at the bottom.
 const LOG_LIMIT = 500;
@@ -483,12 +486,13 @@ function showRuntimeInfo(state) {
   document.getElementById('engine-frames').textContent = String(stats.frames);
   document.getElementById('engine-heap').textContent = `${(stats.heapBytes / 1048576).toFixed(0)} MB`;
   document.getElementById('engine-shaders').textContent = `${stats.shaderCompiles} (${stats.shaderCompileFailures} failed)`;
+  return stats;
 }
 
 function pollStatus() {
   if (!edenModule || crashed || memoryUnavailable) return;
   const state = edenModule._eden_get_state();
-  showRuntimeInfo(state);
+  const runtimeStats = showRuntimeInfo(state);
   const name = EmuState[state] || `State ${state}`;
   wasmState.textContent = name;
   isRunning = state === 2;
@@ -515,7 +519,7 @@ function pollStatus() {
   const gameFps = finite(edenModule._eden_get_game_fps());
   // Running is reported as soon as the core starts; the game is loaded once it draws a frame.
   if (state === 2 && gameFps > 0) loader.finish();
-  watchFrames(state, gameFps);
+  watchFrames(state, gameFps, runtimeStats?.frames);
   const speed = finite(edenModule._eden_get_emulation_speed()) * 100;
   fpsCounter.textContent = `${gameFps.toFixed(1)} FPS`;
   systemFps.textContent = `${finite(edenModule._eden_get_system_fps()).toFixed(1)} FPS`;
@@ -585,7 +589,7 @@ async function handleFile(file) {
 }
 
 async function loadFile(file) {
-  let rom = { name: file.name, size: file.size, stream: async () => file.stream() };
+  let rom = { name: file.name, size: file.size, file, stream: async () => file.stream() };
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith('.keys')) {
     await importSystemFiles([file]);
@@ -663,7 +667,13 @@ async function loadFile(file) {
       edenModule.FS.mkdirTree('/roms');
       loader.setPhase('copy');
       diagnostics.stage('copy');
-      const copied = await mountRom(edenModule.FS, path, rom, bytes => { loader.bytes = bytes; });
+      let copied;
+      if (edenModule._eden_register_browser_rom && (rom.file || navigator.storage?.getDirectory)) {
+        browserRom = await mountBrowserRom(edenModule, path, rom, bytes => { loader.bytes = bytes; });
+        copied = browserRom.bytes;
+      } else {
+        copied = await mountRom(edenModule.FS, path, rom, bytes => { loader.bytes = bytes; });
+      }
       log(`Mounted ${rom.name}: ${copied} bytes in ${((performance.now() - loader.copyStart) / 1000).toFixed(1)} s.`, 'ui');
       loader.setPhase('boot');
       diagnostics.stage('boot');
@@ -682,6 +692,8 @@ async function loadFile(file) {
       setRomStatus(`Booting ${rom.name}. Reload the page to load a different game.`);
       statusTimer ??= setInterval(pollStatus, 500);
     } catch (err) {
+      browserRom?.close();
+      browserRom = null;
       console.error('Failed to load ROM:', err.stack || err.message);
       alert(`Failed to load ROM: ${err.message}`);
       loader.fail();
@@ -767,11 +779,13 @@ window.addEventListener('keydown', (e) => {
   if (e.altKey && e.key === 'Enter') {
     e.preventDefault();
     toggleFullscreen();
+  } else if (e.key === 'Escape' && fullscreenElement() === screenStage) {
+    toggleFullscreen();
   }
 });
 
 // Controller input goes to the engine once a game is running.
-setupInput(() => (isRomLoaded ? edenModule : null));
+setupInput(() => (isRomLoaded && !crashed ? edenModule : null));
 
 // Keys & firmware widget
 const systemCard = document.getElementById('system-files-card');
@@ -825,7 +839,7 @@ async function importSystemFiles(files) {
       if (result.firmwareCount) parts.push(`${result.firmwareCount} firmware NCAs`);
       sysProgress.textContent = `Imported ${parts.join(' and ')} from ${file.name}.`;
     }
-    if (isInitialized) {
+    if (isRomLoaded) {
       sysProgress.textContent += ' Reload the page to apply.';
     }
   } catch (err) {
@@ -883,7 +897,6 @@ const RESUME_DIR = 'crash-resume';
 let lastGameFile = null;
 let bootedAt = 0;
 let stopSaveWatch = null;
-let lastFrameAt = 0;
 const autoRestart = document.getElementById('auto-restart');
 const recoveryStatus = document.getElementById('recovery-status');
 
@@ -900,6 +913,7 @@ try { sessionStorage.removeItem(RESUME_KEY); } catch {}
 const restarts = readSession(RESTARTS_KEY, []).filter(time => Date.now() - time < RESTART_WINDOW_MS);
 
 const CRASH_OUTPUT = [
+  /Eden native termination:/,
   /worker sent an error!/,
   /Aborted\(/,
   /RuntimeError/,
@@ -913,24 +927,36 @@ function checkCrashOutput(text) {
   if (CRASH_OUTPUT.some(pattern => pattern.test(clean))) onCrash(clean.slice(0, 300));
 }
 
-// Frames stopping for FREEZE_MS after the game has drawn counts as a hang.
-function watchFrames(state, gameFps) {
-  if (crashed || !isRomLoaded || state !== 2) return;
-  const now = performance.now();
-  if (gameFps > 0) {
-    if (!lastFrameAt) {
-      try { sessionStorage.removeItem('eden-memory-reloads'); } catch {}
-    }
-    lastFrameAt = now;
-  } else if (lastFrameAt && now - lastFrameAt > FREEZE_MS) {
-    onCrash(`no frames for ${Math.round((now - lastFrameAt) / 1000)} s`);
-  }
+// Frame counters keep the watchdog effective when a dead worker leaves a stale FPS value.
+const observeFrames = createFrameWatchdog({
+  timeoutMs: FREEZE_MS,
+  onFirstFrame: () => {
+    try { sessionStorage.removeItem('eden-memory-reloads'); } catch {}
+  },
+  onFreeze: onCrash,
+});
+function watchFrames(state, gameFps, frames) {
+  if (crashed || !isRomLoaded) return;
+  observeFrames(state, gameFps, frames);
 }
 
 async function onCrash(reason) {
   // A reload for memory is already on its way; the errors that follow are not a game crash.
   if (crashed || !lastGameFile || memoryUnavailable) return;
   crashed = true;
+  isRunning = false;
+  isPaused = false;
+  clearInterval(statusTimer);
+  statusTimer = null;
+  wasmState.textContent = 'Crashed';
+  wasmStatusText.textContent = `Crashed: ${currentRomName}`;
+  fpsCaption.textContent = '';
+  fpsCounter.textContent = '--';
+  systemFps.textContent = '--';
+  frametimeCounter.textContent = '-- ms';
+  emuSpeed.textContent = '--';
+  pauseOverlay.style.display = 'none';
+  fullscreenPause.disabled = true;
   try { edenModule?._eden_set_audio_volume?.(0, 1); } catch {}
   btnPlay.disabled = true;
   btnPause.disabled = true;

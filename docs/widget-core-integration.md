@@ -110,3 +110,62 @@ separately.
 - Remaining work: JIT allocation failure and black rendering in Silksong,
   recovery after that failure, fullscreen verification, frame-step API, emulator
   save-state serialization and browser Local Play transport.
+
+## File-backed ROM reader and additional widget verification
+
+The API 4 engine and frontend now use a dedicated file reader worker and a shared
+4 MB native mailbox. Raw files remain browser `File` objects. Compressed ROMs
+stream into OPFS and are read from there after extraction. The older block mount
+remains a compatibility fallback. Keys, firmware and saves keep their existing
+filesystem and persistence paths.
+
+The allocator investigation (`jit-malloc-repro/`, `memory-probe.json` and native-debug
+logs under `artifacts/widget-core/`) found Chrome rejecting Wasm memory growth
+at roughly 6.99 GB while the previous reader retained 2.49 GB of decoded ROM in
+JavaScript. A no-ROM probe grew the same engine beyond that point. This is evidence
+of browser memory pressure, rather than an oversized JIT code buffer. The new
+reader removes that full-ROM retention. Optional native allocation diagnostics
+are disabled in normal builds. JIT region allocation failure now falls back to
+the interpreter for that region.
+
+The `silksong-file-io/` run used the original 7z through the UI, reached Running
+at about 10 seconds and peaked at 58.5 FPS without the earlier allocation errors.
+It still failed: captures remained black and the engine terminated later. The
+follow-up `renderer-fault/` run resolves the termination stack through WebGPU
+`TextureCache::JoinImages` / `InsertImage`; the terminate handler reports no active
+C++ exception. This localizes the next investigation but does not establish a
+root cause or playable gameplay. A separate core-only Node observation ran for
+180 seconds without the allocation failure, but hung during shutdown and was
+terminated; it is not a passing end-to-end result.
+
+`widgets-crash-io.log` records **25 sequential passing checks** with the actual
+7z, keys and firmware imported locally, including:
+
+- Raw and archived mailbox reads, block boundaries, EOF, and offsets above 4 GB.
+- Native fullscreen entry, Escape exit, Alt+Enter entry and button exit.
+- Core boot, CPU/heap display, scaling, pause/resume, real output gain/mute,
+  controller press/release, and first-save persistence/restoration.
+- A deliberately injected crash clears stale performance values, disables
+  emulation controls and persists its report. This verifies the UI transition,
+  not recovery of a terminated native worker.
+
+The watchdog now uses the monotonic frame counter, so a stale positive FPS value
+cannot hide a stalled worker. Unit checks cover long pauses, first-frame startup,
+counter progress and the older-core fallback. System-file import requests a
+reload only after a game has loaded. Browser UDP input polling is disabled in
+the engine because this frontend uses its virtual gamepad.
+
+Remaining work is visible Silksong rendering and the native renderer termination,
+end-to-end automatic recovery after that failure, frame stepping, emulator
+save-state serialization, and browser Local Play transport. Unavailable native
+features are not claimed as connected. All game, key, firmware, save and telemetry
+artifacts remain local and ignored.
+
+Final release validation rebuilt both browser and headless engines with allocation
+diagnostics off (`engine-file-io-release-build.log`) and installed all four runtime
+files with the default `npm run sync`. `unit-file-io-release.log` records passing
+`npm test` results. `widgets-file-io-release.log` and `widgets/report.json` record
+**26 passing checks with no browser errors** against that release runtime and the
+original 7z. The added check rejects decoder startup errors and truncated archive
+output, then successfully mounts valid files. This remains widget and boot
+validation; the black-rendering limitation above still applies.

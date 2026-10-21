@@ -330,6 +330,7 @@ async function runOnce(index) {
             state: document.getElementById('wasm-state').textContent,
             romStatus: document.getElementById('rom-status').textContent,
             fps,
+            heapBytes: lab?.memory?.buffer.byteLength ?? null,
             load: document.getElementById('rom-eta').hidden ? '' : document.getElementById('rom-eta').textContent,
             progress: document.getElementById('rom-progress').value,
             drained: lab?.drain() ?? null,
