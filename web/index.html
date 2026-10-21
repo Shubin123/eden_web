@@ -158,6 +158,7 @@
         <h2>⚙️ Emulation core</h2>
         <label for="cpu-core" class="mode-help field-label">Emulation core</label>
         <select id="cpu-core" class="renderer-select" aria-label="Emulation core"></select>
+        <p id="cpu-core-recommendation" class="mode-help" hidden></p>
         <p id="cpu-core-summary" class="mode-help"></p>
         <div class="core-tradeoffs">
           <div><h3>Benefits</h3><ul id="cpu-core-pros" class="core-list"></ul></div>
@@ -193,6 +194,31 @@
           <button class="btn" id="btn-crash-clear" disabled>Clear</button>
         </div>
         <p class="mode-help">Reports stay in this browser. They include the game, core, versions and recent log, so the crash can be reproduced and tested later.</p>
+      </div>
+
+      <div class="card" id="compat-card" data-widget="compatibility"
+           data-settings="per-game compatibility: results by core and engine version, the recommended core, your own rating, import, export or clear results">
+        <h2>📊 Compatibility</h2>
+        <label for="compat-game" class="mode-help field-label">Game</label>
+        <select id="compat-game" class="renderer-select" aria-label="Game" disabled></select>
+        <p id="compat-recommendation" class="mode-help">No results yet.</p>
+        <p id="compat-regressions" class="mode-help compat-warning" hidden></p>
+        <h3>Results by core</h3>
+        <ul id="compat-results" class="core-list"></ul>
+        <p id="compat-coverage" class="mode-help"></p>
+        <h3>Your rating</h3>
+        <p id="compat-report-target" class="mode-help">Play a game, then rate how it ran here.</p>
+        <select id="compat-rating" class="renderer-select" aria-label="Rating"></select>
+        <textarea id="compat-note" class="renderer-select" rows="2" maxlength="500" placeholder="Note (optional)" aria-label="Note"></textarea>
+        <button class="btn" id="btn-compat-report" disabled>Save rating</button>
+        <div class="stat-row"><span class="label">Stored</span><span id="compat-count" class="value">--</span></div>
+        <div class="core-actions">
+          <button class="btn" id="btn-compat-import">Import results</button>
+          <button class="btn" id="btn-compat-export" disabled>Export</button>
+          <button class="btn" id="btn-compat-clear" disabled>Clear</button>
+        </div>
+        <input type="file" id="compat-import-input" accept=".json,application/json" multiple hidden>
+        <p id="compat-status" class="mode-help" aria-live="polite">Each game you play is recorded automatically after about 45 s of play; ratings you save are marked as user reports. Results stay in this browser. Import accepts result files from the e2e and matrix tests.</p>
       </div>
 
       <div class="card" id="rom-card" data-widget="rom"

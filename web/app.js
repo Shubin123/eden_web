@@ -19,6 +19,7 @@ import {
   listCrashes,
   clearCrashes,
 } from './recovery.js';
+import { setupCompatibility } from './compat.js';
 
 // DOM Elements
 const canvas = document.getElementById('canvas');
@@ -367,6 +368,7 @@ async function initWasmCoreOnce() {
       onAbort: (what) => onCrash(`runtime aborted: ${what}`),
     });
     isInitialized = true;
+    compat.coreReady();
     wasmBadge.className = 'status-badge ready';
     wasmStatusText.textContent = 'WASM Core Ready';
     wasmState.textContent = 'Idle';
@@ -586,6 +588,7 @@ async function handleFile(file) {
     bootedAt = performance.now();
     stopSaveWatch?.();
     stopSaveWatch = watchSaves(() => edenModule?.FS, () => isRunning && !crashed, showSavePoint);
+    compat.startSession({ module: edenModule, rom, core: runningCore });
     dropZone.style.display = 'none';
     fileInput.disabled = true;
     setRomStatus(`Booting ${rom.name}. Reload the page to load a different game.`);
@@ -856,6 +859,7 @@ async function onCrash(reason) {
   };
   log(`Game crashed on ${runningCore.name}: ${reason}`, 'err');
   await recordCrash(report).catch(err => console.warn('Could not store crash report:', err));
+  await compat.crashed(reason);
   refreshCrashReports();
 
   const hint = runningCore.id === 'jit' ? ' If it keeps happening, try the IR interpreter core.' : '';
@@ -1018,6 +1022,9 @@ coreApply.addEventListener('click', () => {
   location.replace(url);
 });
 log(`CPU core: ${runningCore.name}`, 'ui');
+
+// Compatibility widget: records each play session and recommends a core per game.
+const compat = setupCompatibility({ log });
 
 refreshSystemStatus();
 inspectGpu();

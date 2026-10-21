@@ -570,7 +570,7 @@ kbd {
 .app-footer a { color: #89b4fa; text-decoration: none; }
 
 /* Emulation widget: CPU core trade-offs */
-#emulation-card h3 { font-size: 0.74rem; color: #8995aa; margin: 8px 0 2px; font-weight: 600; }
+#emulation-card h3, #compat-card h3 { font-size: 0.74rem; color: #8995aa; margin: 8px 0 2px; font-weight: 600; }
 .core-tradeoffs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0 12px; }
 .core-list { margin: 0; padding-left: 16px; font-size: 0.74rem; color: #c8cfdc; line-height: 1.4; }
 .core-tested li strong { color: #e6eaf2; font-weight: 600; }
@@ -582,3 +582,6 @@ kbd {
 .btn[hidden] { display: none; }
 .core-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .core-actions .btn { flex: 1 1 auto; white-space: nowrap; }
+.compat-warning { color: #f1c40f; }
+#compat-note { resize: vertical; font: inherit; font-size: 0.8rem; }
+#cpu-core-recommendation { color: #8fd6a6; margin-bottom: 4px; }
