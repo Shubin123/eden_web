@@ -6,6 +6,7 @@
 //   node tests/e2e.mjs [--url https://shubin123.github.io/eden_web/] [--static] [--seconds 90]
 // --static serves the local build without COOP/COEP headers, as GitHub Pages does.
 // --chrome-log prints Chrome's log, including GPU process errors, to stderr.
+// --core <id> runs on that CPU core (see web/cores.js) and checks the engine reports it.
 //   EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip EDEN_ROM=game.nsp node tests/e2e.mjs
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -16,6 +17,7 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 import { createServer } from '../scripts/server.mjs';
+import { CPU_CORES } from '../web/cores.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const { values: args } = parseArgs({
@@ -25,6 +27,7 @@ const { values: args } = parseArgs({
     headful: { type: 'boolean', default: false },
     static: { type: 'boolean', default: false },
     'chrome-log': { type: 'boolean', default: false },
+    core: { type: 'string' },
   },
 });
 
@@ -99,7 +102,12 @@ try {
   });
 
   const loadStart = Date.now();
-  await page.goto(url, { waitUntil: 'load' });
+  const core = args.core && CPU_CORES.find(c => c.id === args.core);
+  if (args.core && !core) throw new Error(`unknown core ${args.core}; one of ${CPU_CORES.map(c => c.id).join(', ')}`);
+  const pageUrl = new URL(url);
+  if (core) pageUrl.searchParams.set('core', core.id);
+  report.core = core?.id ?? 'default';
+  await page.goto(pageUrl.href, { waitUntil: 'load' });
   // On static hosts the COI service worker reloads the page once before isolation is active.
   let isolated = false;
   for (const end = Date.now() + 30_000; !isolated && Date.now() < end;) {
@@ -168,6 +176,10 @@ try {
       }
     }
 
+    if (core) {
+      const reported = consoleLog.find(line => line.includes('CPU core: ') && line.includes('Frontend'));
+      check('engine uses selected core', reported?.includes(`CPU core: ${core.name}`), reported?.replace(/.*CPU core: /, '').replace(/\x1b\[[0-9;]*m/g, '') ?? 'not logged');
+    }
     const running = report.timeline.find(sample => sample.state === 'Running');
     const firstFrame = report.timeline.find(sample => sample.fps > 0);
     const peakFps = Math.max(0, ...report.timeline.map(sample => sample.fps));

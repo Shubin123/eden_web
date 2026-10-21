@@ -45,6 +45,21 @@ EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip EDEN_ROM=game.nsp npm run test:e2e
 ```
 Reports and screenshots are written to `artifacts/`.
 
+## Emulation cores
+
+The **Emulation** widget picks the CPU core guest code runs on and lists each core's benefits,
+downsides and tested games:
+
+| Core | Use it for | Trade-off |
+|---|---|---|
+| **Wasm JIT** (default) | Everything; needed for 3D games | Compile stutters; a JIT bug can break a game |
+| **IR interpreter** | Light 2D games, and checking whether a bug is the JIT's | Several times slower |
+
+The core is fixed when the runtime starts, so switching reloads the page (keys and firmware stay
+installed). `?core=interpreter` in the URL overrides the stored choice for one load, and
+`npm run test:e2e -- --core <id>` checks that the engine really runs the selected core. Cores are
+defined in `web/cores.js`; add one there only after it has been tested, with its results.
+
 ## Versioning
 
 Every build names exactly what it runs, in the **WebAssembly → Version** row of the page and in the

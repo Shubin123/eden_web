@@ -568,3 +568,10 @@ kbd {
   color: #888;
 }
 .app-footer a { color: #89b4fa; text-decoration: none; }
+
+/* Emulation widget: CPU core trade-offs */
+#emulation-card h3 { font-size: 0.74rem; color: #8995aa; margin: 8px 0 2px; font-weight: 600; }
+.core-tradeoffs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0 12px; }
+.core-list { margin: 0; padding-left: 16px; font-size: 0.74rem; color: #c8cfdc; line-height: 1.4; }
+.core-tested li strong { color: #e6eaf2; font-weight: 600; }
+#cpu-core-apply { margin-top: 6px; width: 100%; }

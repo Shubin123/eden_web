@@ -9,6 +9,7 @@ import {
 } from './system-files.js';
 import { setupInput } from './input.js';
 import { isArchive, openArchive } from './archive.js';
+import { CPU_CORES, activeCore, coreEnvironment, findCore, storeCore } from './cores.js';
 
 // DOM Elements
 const canvas = document.getElementById('canvas');
@@ -339,6 +340,7 @@ async function initWasmCoreOnce() {
     wasmStatusText.textContent = 'Instantiating WASM...';
     edenModule = await createEdenModule({
       locateFile: (path) => 'runtime/' + path,
+      preRun: [coreEnvironment(runningCore)],
       print: (text) => { console.log('[Eden]', text); log(text); },
       printErr: (text) => { console.error('[Eden]', text); log(text); },
     });
@@ -718,6 +720,49 @@ systemCard.addEventListener('drop', (e) => {
   systemCard.classList.remove('dragover');
   importSystemFiles([...e.dataTransfer.files]);
 });
+
+// Emulation widget: the CPU core is chosen before the runtime starts, so a change reloads the page.
+const runningCore = activeCore();
+const coreSelect = document.getElementById('cpu-core');
+const coreApply = document.getElementById('cpu-core-apply');
+
+function fillList(id, items, render = item => [document.createTextNode(item)]) {
+  const list = document.getElementById(id);
+  list.replaceChildren(...items.map(item => {
+    const li = document.createElement('li');
+    li.append(...render(item));
+    return li;
+  }));
+}
+
+function showCore(core) {
+  document.getElementById('cpu-core-summary').textContent = core.summary;
+  fillList('cpu-core-pros', core.pros);
+  fillList('cpu-core-cons', core.cons);
+  fillList('cpu-core-tested', core.tested, ({ game, result }) => {
+    const name = document.createElement('strong');
+    name.textContent = game;
+    return [name, document.createTextNode(`: ${result}`)];
+  });
+  coreApply.hidden = core.id === runningCore.id;
+  coreApply.textContent = `Reload to switch to ${core.name}`;
+}
+
+for (const core of CPU_CORES) {
+  coreSelect.append(new Option(core.name, core.id));
+}
+coreSelect.value = runningCore.id;
+document.getElementById('cpu-core-active').textContent = runningCore.name;
+showCore(runningCore);
+coreSelect.addEventListener('change', () => showCore(findCore(coreSelect.value)));
+coreApply.addEventListener('click', () => {
+  if (isRomLoaded && !confirm('Switching the CPU core reloads the page and stops the running game. Continue?')) return;
+  storeCore(coreSelect.value);
+  const url = new URL(location.href);
+  url.searchParams.delete('core');
+  location.replace(url);
+});
+log(`CPU core: ${runningCore.name}`, 'ui');
 
 refreshSystemStatus();
 inspectGpu();
