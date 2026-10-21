@@ -45,6 +45,21 @@ EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip EDEN_ROM=game.nsp npm run test:e2e
 ```
 Reports and screenshots are written to `artifacts/`.
 
+## Versioning
+
+Every build names exactly what it runs, in the **WebAssembly → Version** row of the page and in the
+log, e.g. `0.1.0 · web 14ea2b9 · engine 8d03142`:
+
+- **Product version**: `version` in `package.json`, bumped for user-visible releases.
+- **Frontend revision**: the eden_web commit. `web/version.json` holds all three; the Pages
+  workflow writes it when deploying and `npm run sync` writes a local one.
+- **Engine revision**: the eden_emscripten commit the runtime was built from (`git describe`),
+  recorded in `web/runtime/runtime.json` by `npm run sync` and `npm run publish-runtime`.
+
+`npm run publish-runtime` refuses dev builds (`EDEN_DEV=1`) and engine trees with uncommitted
+changes, and the Pages workflow refuses to deploy a dev build, so the deployed revision can always
+be checked out and rebuilt. Local builds are marked `local` (or `local dev build`).
+
 ## Controls
 
 | Switch Button | Keyboard Key | Joy-Con UI |

@@ -46,8 +46,23 @@ jobs:
               const actual = createHash("sha256").update(fs.readFileSync("web/runtime/" + file)).digest("hex");
               if (actual !== sha256) throw new Error(file + " checksum mismatch");
             }
+            if (manifest.build && manifest.build !== "release") throw new Error("refusing to deploy a " + manifest.build + " build");
             console.log("Runtime " + manifest.engineRevision + " verified");'
           node tests/web_artifact_smoke.cjs
+      # One place for the deployed version: package.json version, this commit and the engine revision.
+      - name: Write version
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const { version } = JSON.parse(fs.readFileSync("package.json"));
+            const runtime = JSON.parse(fs.readFileSync("web/runtime/runtime.json"));
+            fs.writeFileSync("web/version.json", JSON.stringify({
+              version,
+              webRevision: process.env.GITHUB_SHA.slice(0, 7),
+              engineRevision: runtime.engineRevision,
+              deployedAt: new Date().toISOString(),
+            }, null, 2) + "\n");'
+          cat web/version.json
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload web bundle

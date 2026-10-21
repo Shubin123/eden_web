@@ -116,6 +116,12 @@ try {
   report.coreReadyMs = Date.now() - loadStart;
   check('WASM core ready', coreReady === 'WASM Core Ready', coreReady);
   check('core ready time', report.coreReadyMs <= baseline.coreReadyMs, `${report.coreReadyMs} ms <= ${baseline.coreReadyMs} ms`);
+  const version = await page.waitForFunction(() => {
+    const text = document.getElementById('build-version').textContent;
+    return text !== '--' && text;
+  }, { timeout: 15_000 }).then(handle => handle.jsonValue()).catch(() => '');
+  check('version shown', /engine \S+/.test(version), version);
+  report.version = version;
   report.wasmSize = await page.$eval('#wasm-size', element => element.textContent);
   check('runtime wasm served', /MB/.test(report.wasmSize), report.wasmSize);
 

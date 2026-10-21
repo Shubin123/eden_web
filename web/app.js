@@ -281,6 +281,21 @@ function checkIsolation() {
 }
 
 // Fetch WASM size metadata
+// version.json is written by the Pages workflow when deploying and by `npm run sync` locally.
+async function showVersion() {
+  const element = document.getElementById('build-version');
+  const info = await fetch('version.json', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+  if (!info) {
+    element.textContent = 'unknown';
+    return;
+  }
+  const parts = [info.version, `web ${info.webRevision}`, `engine ${info.engineRevision}`];
+  if (info.local) parts.push(info.build === 'dev' ? 'local dev build' : 'local');
+  element.textContent = parts.join(' · ');
+  element.title = info.deployedAt ? `Deployed ${info.deployedAt}` : 'Served locally';
+  log(`Eden Web ${parts.join(' · ')}`, 'ui');
+}
+
 async function inspectWasmBinary() {
   try {
     const res = await fetch('runtime/eden.wasm', { method: 'HEAD' });
@@ -706,6 +721,7 @@ systemCard.addEventListener('drop', (e) => {
 
 refreshSystemStatus();
 inspectGpu();
+showVersion();
 
 // Initial boot (module scripts are deferred, so the DOM is already parsed)
 initWasmCore();
