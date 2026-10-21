@@ -168,6 +168,8 @@ async function runOnce(index) {
   let stage = 'environment';
   let bootStart = null;
   let firstFrameAt = null;
+  let runtimeResponsive = true;
+  let browserPageError = null;
 
   const page = await browser.newPage();
   async function snapshot(file, canvas = false) {
@@ -205,6 +207,16 @@ async function runOnce(index) {
     report.memoryReloads = 0;
     report.crashes = [];
     const pageErrors = [];
+    page.on('error', error => {
+      runtimeResponsive = false;
+      const reason = `browser page crashed: ${error.message}`;
+      browserPageError = reason;
+      consoleLog.push(reason);
+      report.errors.push(reason);
+      report.crashes.push({ t: bootStart === null ? null : Math.round((Date.now() - bootStart) / 1000), reason });
+      appendFileSync(consolePath, reason + '\n');
+      console.log(reason);
+    });
     page.on('framenavigated', frame => { if (frame === page.mainFrame()) reloadingForMemory = false; });
     page.on('dialog', async dialog => {
       const text = `[${dialog.type()}] ${dialog.message()}`;
@@ -317,26 +329,49 @@ async function runOnce(index) {
       bootStart = Date.now();
       const deadline = bootStart + Number(args.seconds) * 1000;
       let shot = 0;
+      let missingSamples = 0;
       const shotStages = new Set();
+      const sampleClient = await page.createCDPSession();
+      const samplePage = wantPresent => {
+        if (!document.getElementById('wasm-state')) return null;
+        const lab = window.__edenLab;
+        const fps = parseFloat(document.getElementById('fps-counter').textContent) || 0;
+        if (wantPresent && fps > 0) lab?.startPresent();
+        return {
+          status: document.getElementById('wasm-status-text').textContent,
+          state: document.getElementById('wasm-state').textContent,
+          romStatus: document.getElementById('rom-status').textContent,
+          fps,
+          heapBytes: lab?.memory?.buffer.byteLength ?? null,
+          load: document.getElementById('rom-eta').hidden ? '' : document.getElementById('rom-eta').textContent,
+          progress: document.getElementById('rom-progress').value,
+          drained: lab?.drain() ?? null,
+        };
+      };
       while (Date.now() < deadline) {
         await new Promise(resolve => setTimeout(resolve, 2000));
-        // Crash recovery reloads the page; skip samples taken while it navigates.
-        const sample = await page.evaluate(wantPresent => {
-          const lab = window.__edenLab;
-          const fps = parseFloat(document.getElementById('fps-counter').textContent) || 0;
-          if (wantPresent && fps > 0) lab?.startPresent();
-          return {
-            status: document.getElementById('wasm-status-text').textContent,
-            state: document.getElementById('wasm-state').textContent,
-            romStatus: document.getElementById('rom-status').textContent,
-            fps,
-            heapBytes: lab?.memory?.buffer.byteLength ?? null,
-            load: document.getElementById('rom-eta').hidden ? '' : document.getElementById('rom-eta').textContent,
-            progress: document.getElementById('rom-progress').value,
-            drained: lab?.drain() ?? null,
-          };
-        }, args.present).catch(() => null);
-        if (!sample) continue;
+        // Observe with a deadline outside the page: its event loop may be blocked in Wasm.
+        let sample;
+        try {
+          const response = await sampleClient.send('Runtime.evaluate', {
+            expression: `(${samplePage.toString()})(${args.present})`, returnByValue: true,
+          }, { timeout: 10_000 });
+          if (response.exceptionDetails) throw new Error(response.exceptionDetails.text);
+          sample = response.result.value;
+        } catch (error) {
+          // A recovery reload can replace the execution context between samples.
+          if (!/context.*destroyed|Cannot find .*context/i.test(error.message)) {
+            runtimeResponsive = false;
+            report.errors.push(`runtime sample: ${error.message}`);
+            console.log(`Runtime sampling failed: ${error.message}`);
+            break;
+          }
+        }
+        if (!sample) {
+          if (++missingSamples >= 5) break;
+          continue;
+        }
+        missingSamples = 0;
         const { drained } = sample;
         delete sample.drained;
         if (drained) {
@@ -376,14 +411,20 @@ async function runOnce(index) {
           shot++;
         }
       }
-      game = mergeGameInfo(fileGame, await page.evaluate(() => window.__edenLab?.gameInfo()).catch(() => null));
+      if (runtimeResponsive && missingSamples) {
+        runtimeResponsive = false;
+        report.errors.push('runtime sample: no game status at the end of the run');
+      }
+      await sampleClient.detach().catch(() => {});
+      if (runtimeResponsive) game = mergeGameInfo(fileGame, await page.evaluate(() => window.__edenLab?.gameInfo()).catch(() => null));
+      check('page responds through end', runtimeResponsive, runtimeResponsive ? undefined : report.errors.at(-1), 'hang');
 
       const failedState = report.timeline.find(sample => sample.state === 'Failed' || /ROM Load Failed|Cannot boot|Cannot open/.test(sample.status + sample.romStatus));
       if (core) {
         const reported = consoleLog.find(line => line.includes('CPU core: ') && line.includes('Frontend'));
         check('engine uses selected core', reported?.includes(`CPU core: ${core.name}`), reported?.replace(/.*CPU core: /, '').replace(/\x1b\[[0-9;]*m/g, '') ?? 'not logged', 'init');
       }
-      if (args['crash-at']) {
+      if (args['crash-at'] && runtimeResponsive) {
         const after = report.timeline.filter(sample => report.crashInjectedAt && sample.t > report.crashInjectedAt);
         check('crash simulated', Boolean(report.crashInjectedAt), report.crashInjectedAt ? `t=${report.crashInjectedAt}s` : 'game never drew a frame', 'no-frames');
         check('crash report stored', await page.$eval('#crash-count', el => Number(el.textContent) > 0), undefined, 'crash');
@@ -422,16 +463,18 @@ async function runOnce(index) {
         firstFrame ? 'performance' : 'no-frames');
       check('peak game fps', peakFps >= baseline.minPeakFps, `${peakFps.toFixed(1)} >= ${baseline.minPeakFps}`, 'performance');
       check('sustained game fps', report.sustainedFps >= baseline.minSustainedFps, `median of last third ${report.sustainedFps.toFixed(1)} >= ${baseline.minSustainedFps}`, 'performance');
-      check('still running at end', last?.state === 'Running', last?.state, firstFrame ? 'crash' : 'boot');
+      check('still running at end', runtimeResponsive && last?.state === 'Running', runtimeResponsive ? last?.state : 'page unresponsive',
+        runtimeResponsive ? (firstFrame ? 'crash' : 'boot') : 'hang');
       const detailed = report.frames.filter(frame => frame.bytes >= baseline.minFramePngBytes);
       check('game frames visible', detailed.length > 0,
         `${detailed.length}/${report.frames.length} canvas captures >= ${baseline.minFramePngBytes} bytes, largest ${Math.max(0, ...report.frames.map(frame => frame.bytes))}`, 'no-frames');
       check('no critical logs', criticalLogs === 0, `${criticalLogs}`, 'crash');
     }
 
+    check('no browser page crashes', browserPageError === null, browserPageError ?? undefined, bootStart === null ? 'init' : 'crash');
     check('no page errors', pageErrors.length === 0, pageErrors[0]?.message, pageErrors[0]?.booted ? 'crash' : 'init');
     check('no failed requests', report.errors.filter(error => /^(requestfailed|HTTP)/.test(error)).length === 0, undefined, 'artifact');
-    if (args.screenshots) {
+    if (args.screenshots && runtimeResponsive) {
       await snapshot(path.join(artifacts, `e2e-${stamp}-final.png`));
       check('screenshots captured', !report.errors.some(error => error.startsWith('screenshot:')), undefined, 'environment');
     }

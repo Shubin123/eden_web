@@ -169,3 +169,53 @@ files with the default `npm run sync`. `unit-file-io-release.log` records passin
 original 7z. The added check rejects decoder startup errors and truncated archive
 output, then successfully mounts valid files. This remains widget and boot
 validation; the black-rendering limitation above still applies.
+
+## ASTC renderer failure identified and fixed
+
+The `texture-diagnostic/` run captures the previously hidden error: Chrome rejects
+an `astc-4x4-unorm` 160×176 texture because this NVIDIA Pascal device does not
+expose `texture-compression-astc`. The error crosses the native texture constructor
+and reaches the slot container's `noexcept` guard. Its terminate handler has no
+active C++ exception, so the earlier termination message alone did not reveal
+the cause. The Wasm disassembly confirms that constructor/guard path.
+
+The engine now routes unsupported ASTC textures through its existing CPU decoder
+and uploads RGBA8 pixels. The fallback uses decoded row sizes, preserves sRGB
+views and counts decoded memory. Native ASTC remains available on supporting
+devices and supported block sizes. The web settings explicitly disable ASTC
+recompression for this upload path.
+
+`astc-fallback/` reaches and uploads the ASTC assets without the previous texture
+exception. It still **fails**: captured frames remain black and the browser later
+stops responding. `astc-watch.log` and `call-trace/` reproduce the loss of response.
+Local system crash records identify a Chrome renderer process receiving SIGILL;
+the available core does not provide a usable native stack. This does not establish
+the cause of the browser crash or prove playable gameplay.
+
+The harness now bounds runtime sampling outside the page, records browser page
+crashes, skips further runtime queries when unresponsive, and fails its final
+Running check instead of accepting the last stale sample. `call-trace/` and
+`unshared-uploads/` verify that an unresponsive runtime is rejected. The optional
+allocator build records heap-growth start/completion and texture exceptions.
+
+Controlled experiments remain local and have not become product workarounds:
+
+- `astc-x11/`: X11 did not remove the black output or response failure.
+- `unshared-uploads/`: copying GPU upload views into standalone buffers did not
+  prevent the failure; that experimental hook was removed.
+- `grow-probe.log`: the idle core's shared memory successfully grew from about
+  4.44 GB to 8.73 GB, so an assumed fixed limit at 7.6 GB is not supported.
+- `pregrow-watch.log`: reserving 9 GiB before game boot also failed later. No
+  larger default heap was adopted.
+
+Visible rendering, the subsequent browser/native failure, recovery and the
+remaining native features still require work. Game archives, system files,
+captures and diagnostic dumps remain local and ignored.
+
+Release validation for this change: both browser and headless engines built with
+diagnostics off (`engine-astc-release-build.log`), the default `npm run sync`
+installed all four runtime files, and `npm test` passed (`unit-astc-release.log`).
+The core-ready browser run passed 10/10 checks (`astc-core-ready/`), and the actual
+7z widget run passed all 26 checks with no browser errors
+(`widgets-astc-release.log`, `widgets/report.json`). These interaction tests
+complete before the longer rendering failure and do not establish playability.
