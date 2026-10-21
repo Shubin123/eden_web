@@ -5,6 +5,8 @@
 // Paths and file contents never go in a result: games are identified by title ID and version.
 
 export const RESULT_SCHEMA = 'eden-web/result@1';
+/// A set of results from one test session (a matrix or repeated runs), with what was run.
+export const RESULT_SET_SCHEMA = 'eden-web/result-set@1';
 
 /// Ordered from "the environment could not run anything" to "it ran, but too slowly", so the
 /// first failing stage of a launch picks the category.
@@ -62,6 +64,17 @@ export function validateResult(result) {
   if (result.game?.titleId && !/^[0-9A-F]{16}$/i.test(result.game.titleId)) problems.push(`bad titleId ${result.game.titleId}`);
   if (result.metrics && typeof result.metrics !== 'object') problems.push('metrics is not an object');
   return problems;
+}
+
+export function makeResultSet(results, meta = {}) {
+  return { schema: RESULT_SET_SCHEMA, createdAt: new Date().toISOString(), meta, results };
+}
+
+/// The results in parsed JSON that is a result, an array of results or a result set.
+export function resultsFrom(json) {
+  if (json?.schema === RESULT_SET_SCHEMA) return json.results ?? [];
+  if (Array.isArray(json)) return json;
+  return json?.schema === RESULT_SCHEMA ? [json] : [];
 }
 
 /// Frame-time statistics from a list of frame times in milliseconds. A stutter is a frame that

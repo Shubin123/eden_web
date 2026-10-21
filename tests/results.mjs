@@ -2,7 +2,7 @@
 // Checks the shared test result format in web/results.js.
 
 import assert from 'node:assert/strict';
-import { compareResults, frameTimeStats, makeResult, validateResult } from '../web/results.js';
+import { compareResults, frameTimeStats, makeResult, makeResultSet, resultsFrom, validateResult } from '../web/results.js';
 
 assert.deepEqual(validateResult(makeResult({ outcome: 'pass' })), []);
 assert.match(validateResult(makeResult({ outcome: 'fail' }))[0], /failure category/);
@@ -25,5 +25,11 @@ const slow = makeResult({ outcome: 'pass', metrics: { sustainedFps: 20 } });
 const slower = makeResult({ outcome: 'pass', metrics: { sustainedFps: 15 } });
 const reported = makeResult({ outcome: 'pass', confidence: 'user', metrics: { sustainedFps: 60 } });
 assert.deepEqual([fast, reported, slower, slow].sort(compareResults), [slow, slower, reported, fast]);
+
+const one = makeResult({ outcome: 'pass' });
+assert.deepEqual(resultsFrom(one), [one]);
+assert.deepEqual(resultsFrom([one, one]), [one, one]);
+assert.deepEqual(resultsFrom(makeResultSet([one], { mode: 'compat' })), [one]);
+assert.deepEqual(resultsFrom({ schema: 'other' }), []);
 
 console.log('results format OK');
