@@ -956,7 +956,7 @@ refreshCrashReports();
 // For tests: simulate a crash of the running game.
 window.edenDebug = { crash: (reason = 'simulated crash') => onCrash(reason) };
 
-// Emulation widget: the CPU core is chosen before the runtime starts, so a change reloads the page.
+// Emulation core widget: the CPU core is chosen before the runtime starts, so a change reloads the page.
 const runningCore = activeCore();
 const coreSelect = document.getElementById('cpu-core');
 const coreApply = document.getElementById('cpu-core-apply');

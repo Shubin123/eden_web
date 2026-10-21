@@ -155,7 +155,7 @@
 
       <div class="card" id="emulation-card" data-widget="emulation"
            data-settings="emulation core (Eden's Wasm JIT or IR interpreter, and other Switch emulators) with the benefits, downsides, tested games and credits of each">
-        <h2>⚙️ Emulation</h2>
+        <h2>⚙️ Emulation core</h2>
         <label for="cpu-core" class="mode-help field-label">Emulation core</label>
         <select id="cpu-core" class="renderer-select" aria-label="Emulation core"></select>
         <p id="cpu-core-summary" class="mode-help"></p>
@@ -177,7 +177,11 @@
         <div class="stat-row"><span class="label">Running</span><span id="cpu-core-active" class="value">--</span></div>
         <button class="btn" id="cpu-core-apply" hidden>Reload to switch core</button>
         <p class="mode-help">The core is fixed once the runtime starts, so switching reloads the page. Keys and firmware stay installed.</p>
-        <h3>Crash recovery</h3>
+      </div>
+
+      <div class="card" id="recovery-card" data-widget="crash-recovery"
+           data-settings="restart crashed games from the last save point, download or clear crash reports">
+        <h2>🛟 Crash recovery</h2>
         <label class="mode-help audio-toggle">
           <input type="checkbox" id="auto-restart" checked>
           Restart the game from the last save point if it crashes or freezes

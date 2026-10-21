@@ -47,7 +47,7 @@ Reports and screenshots are written to `artifacts/`.
 
 ## Emulation cores
 
-The **Emulation** widget picks the CPU core guest code runs on and lists each core's benefits,
+The **Emulation core** widget picks the CPU core guest code runs on and lists each core's benefits,
 downsides, tested games and credits. It also lists the other Switch emulators (Ryujinx Canary /
 Ryubing, Kenji-NX, Citron, Sudachi, MeloNX, Hydra, Strato) with their status and what a browser
 port would take; only Eden is built for WebAssembly, so only its cores can be selected to run:
@@ -72,9 +72,9 @@ defined in `web/cores.js`; add one there only after it has been tested, with its
   JIT bug does) or frames stop for 45 s, the page records a crash report, keeps a copy of the
   game file in the origin-private file system, reloads, and boots the game again from the last
   save point. After 2 crashes in 10 minutes it stops and suggests the IR interpreter core.
-  Automatic restart can be turned off in the **Emulation** widget.
+  Automatic restart can be turned off in the **Crash recovery** widget.
 - **Crash reports** (reason, game, core, versions, recent log) stay in the browser; download them
-  from the Emulation widget to reproduce a crash with the headless runner.
+  from the Crash recovery widget to reproduce a crash with the headless runner.
 - Right after a reload the browser may still hold the previous page's emulated memory; the page
   notices and reloads again after a short wait.
 
@@ -92,7 +92,7 @@ This project stands on the work of many people:
   Project), **zstd** (Yann Collet and Meta), **zlib** (Jean-loup Gailly and Mark Adler) and
   **bzip2** (Julian Seward), which the archive decoder is built from.
 - **Emscripten** and its contributors, which make the WebAssembly build possible.
-- The other emulators in the Emulation widget are credited there: Ryujinx (gdkchan and the
+- The other emulators in the Emulation core widget are credited there: Ryujinx (gdkchan and the
   Ryujinx team), Ryubing (GreemDev and contributors), Kenji-NX (KeatonTheBot and others), Citron
   (Zephyron), Sudachi (Jarrod Norwell), MeloNX (Stossy11), Hydra (SamoZ256) and Strato (the
   Strato team, continuing Skyline).
