@@ -115,7 +115,8 @@ export async function clearSaves() {
 /// Polls the save folders while `healthy()` holds and stores a save point once a change has
 /// settled. Returns a function that stops watching.
 export function watchSaves(getFS, healthy, onSaved, intervalMs = 10_000) {
-  let stored = null;
+  const initialFS = getFS();
+  let stored = initialFS ? signature(listSaveFiles(initialFS)) : null;
   let pending = null;
   let busy = false;
   const timer = setInterval(async () => {

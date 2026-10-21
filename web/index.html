@@ -131,7 +131,7 @@
       <div class="card" data-widget="renderer"
            data-settings="screen scaling (smooth or pixelated), aspect fit, Joy-Con frame">
         <h2>Renderer</h2>
-        <div class="stat-row"><span class="label">Backend</span><span class="value">WebGPU</span></div>
+        <div class="stat-row"><span class="label">Backend</span><span id="renderer-backend" class="value">Waiting for core</span></div>
         <div class="stat-row"><span class="label">GPU</span><span id="gpu-adapter" class="value">Checking...</span></div>
         <div class="stat-row"><span class="label">Canvas</span><span id="canvas-size" class="value">1280×720</span></div>
         <label for="screen-filter" class="mode-help field-label">Screen scaling</label>
@@ -291,12 +291,15 @@
         <div class="stat-row"><span class="label">System FPS</span><span id="system-fps" class="value">--</span></div>
         <div class="stat-row"><span class="label">Frametime</span><span id="frametime-counter" class="value">-- ms</span></div>
         <div class="stat-row"><span class="label">Speed</span><span id="emu-speed" class="value">--</span></div>
+        <div class="stat-row"><span class="label">Frames</span><span id="engine-frames" class="value">--</span></div>
+        <div class="stat-row"><span class="label">Wasm heap</span><span id="engine-heap" class="value">--</span></div>
+        <div class="stat-row"><span class="label">Shader compiles</span><span id="engine-shaders" class="value">--</span></div>
       </div>
 
       <div class="card" id="audio-card" data-widget="audio"
-           data-settings="sound and volume (not available in this engine build yet)">
+           data-settings="game sound, mute and volume">
         <h2>🔊 Audio</h2>
-        <button type="button" class="btn btn-secondary" id="btn-sound" disabled>🔇 Sound: unavailable</button>
+        <button type="button" class="btn btn-secondary" id="btn-sound" disabled>🔇 Sound: waiting</button>
         <div class="speed-control">
           <label for="audio-volume">
             <span>Volume</span><output id="audio-volume-value">--</output>
@@ -304,8 +307,7 @@
           <input id="audio-volume" type="range" min="0" max="100" step="1" value="80" disabled aria-label="Volume">
         </div>
         <div id="audio-status" class="mode-help">
-          This engine build uses a null audio sink, so games run silently. Volume controls will be enabled once the
-          core streams audio to the browser.
+          Waiting for the core. Enable sound here if this browser blocks automatic playback.
         </div>
       </div>
 
@@ -342,8 +344,9 @@
         <div class="stat-row"><span class="label">Version</span><span id="build-version" class="value">--</span></div>
         <div class="stat-row"><span class="label">Binary</span><span id="binary-source-tag" class="value">runtime/eden.wasm</span></div>
         <div class="stat-row"><span class="label">Size</span><span id="wasm-size" class="value">Inspecting...</span></div>
+        <div class="stat-row"><span class="label">Core API</span><span id="engine-api" class="value">--</span></div>
         <div class="stat-row"><span class="label">Memory</span><span class="value">Memory64 (shared)</span></div>
-        <div class="stat-row"><span class="label">CPU</span><span class="value">Dynarmic IR → Wasm JIT</span></div>
+        <div class="stat-row"><span class="label">CPU</span><span id="engine-cpu" class="value">Waiting for core</span></div>
         <div class="stat-row"><span class="label">Isolation</span><span id="coop-status" class="value">Checking...</span></div>
         <div class="stat-row"><span class="label">Threads</span><span id="hw-threads" class="value">--</span></div>
       </div>

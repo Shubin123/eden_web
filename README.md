@@ -8,8 +8,8 @@ A WebAssembly frontend and test harness for the Eden Nintendo Switch emulator po
 ## Architecture
 
 - **`web/index.html`**: Switch console simulation UI with Neon Joy-Cons, canvas screen, drop zone, WASM binary status card, and keyboard controls.
-- **`web/system-files.js`**: Keys & firmware importer. Unpacks `prod.keys`/`title.keys` and firmware `.zip` dumps in the browser, persists them in IndexedDB, and mounts them into Eden's data directory before `eden_init`.
-- **`web/app.js`**: Frontend runtime driver managing the WebAssembly lifecycle, mounting ROMs into the virtual filesystem (MEMFS), and stepping emulation frames.
+- **`web/system-files.js`**: Keys & firmware importer. Unpacks `prod.keys`/`title.keys` and firmware `.zip` dumps in the browser, persists them in IndexedDB, and mounts them into Eden's data directory before boot.
+- **`web/app.js`**: Frontend runtime driver managing the WebAssembly lifecycle, mounting ROMs as block-backed virtual files, and controlling the threaded engine.
 - **`web/coi-serviceworker.js`**: Cross-Origin Isolation Service Worker enabling `SharedArrayBuffer` and multi-threading on GitHub Pages.
 - **`web/runtime/`**: The Eden WebAssembly runtime (`eden.js`, `eden.wasm`) built by `eden_emscripten`. Not committed; synced locally and published as assets of the `runtime` release for Pages.
 - **`scripts/server.mjs`**: Local HTTP server with COOP/COEP headers.
@@ -43,7 +43,24 @@ npm run test:e2e -- --static                            # local build served lik
 npm run test:e2e -- --url https://shubin123.github.io/eden_web/
 EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip EDEN_ROM=game.nsp npm run test:e2e -- --seconds 120
 ```
-Reports and screenshots are written to `artifacts/`.
+Reports and screenshots are written to `artifacts/`. Console logs are written during the run,
+including alerts and the first browser error stacks. `--no-screenshots` is a diagnostic option;
+it does not bypass the visible-frame check.
+
+`npm run test:widgets` runs sequential browser checks against the real runtime: live metadata,
+ROM filesystem reads, first-save persistence/restoration and screen scaling. With `EDEN_KEYS`,
+`EDEN_FIRMWARE` and `EDEN_ROM` it also boots that file and checks pause/resume, volume, mute and
+keyboard forwarding. Use `CHROME_PATH` to select Chrome. See
+[the integration work log](docs/widget-core-integration.md) for results and outstanding work.
+
+## Audio and live engine widgets
+
+The Audio widget requires core API 3. The browser build sends game audio through SDL Web Audio;
+the widget resumes playback if the browser blocks it, and remembers volume and mute. Headless
+builds keep the null sink. Build the sibling engine and run `npm run sync` to update an older runtime.
+The CPU, renderer, API, game title, heap, frame and shader counters report the running engine.
+Frame stepping, emulator save-state slots and Local Play remain unavailable until the core
+implements their backends.
 
 ### Regression lab
 

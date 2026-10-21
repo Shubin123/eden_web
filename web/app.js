@@ -8,6 +8,8 @@ import {
   readZipEntries,
 } from './system-files.js';
 import { setupInput } from './input.js';
+import { mountRom } from './rom-file.js';
+import { setupAudio } from './audio.js';
 import { isArchive, openArchive } from './archive.js';
 import { CPU_CORES, activeCore, coreEnvironment, findCore, storeCore } from './cores.js';
 import {
@@ -65,6 +67,8 @@ let currentRomName = '';
 let currentRomData = null;
 let gpuFailure = '';
 let memoryUnavailable = false;
+let loadingRom = false;
+let crashed = false;
 
 // Log widget: engine output and frontend events, newest at the bottom.
 const LOG_LIMIT = 500;
@@ -95,7 +99,7 @@ function log(text, kind = '') {
 }
 
 const diagnostics = setupDiagnostics({
-  getModule: () => edenModule,
+  getModule: () => crashed ? null : edenModule,
   getLog: () => recentLog,
   getCore: () => runningCore,
   getGameFile: () => currentRomName,
@@ -228,6 +232,9 @@ document.getElementById('btn-log-copy').addEventListener('click', async () => {
   }
 });
 document.getElementById('btn-log-clear').addEventListener('click', () => logBox.replaceChildren());
+
+const pollAudio = setupAudio(() => crashed ? null : edenModule, log);
+setInterval(pollAudio, 500);
 
 // Display settings, remembered per browser. The page works without storage.
 const SETTINGS_KEY = 'eden-settings';
@@ -369,6 +376,7 @@ async function initWasmCoreOnce() {
     initPromise = null;
     return;
   }
+
   const unsupported = diagnostics.blockingProblem();
   if (unsupported) {
     wasmBadge.className = 'status-badge';
@@ -390,6 +398,9 @@ async function initWasmCoreOnce() {
       onAbort: (what) => onCrash(`runtime aborted: ${what}`),
     });
     isInitialized = true;
+    showCoreInfo();
+    pollAudio();
+    statusTimer ??= setInterval(pollStatus, 500);
     compat.coreReady();
     wasmBadge.className = 'status-badge ready';
     wasmStatusText.textContent = 'WASM Core Ready';
@@ -431,9 +442,53 @@ const EmuState = ['Idle', 'Booting', 'Running', 'Paused', 'Failed', 'Stopped'];
 let statusTimer = null;
 let lastState = -1;
 
+const coreReadErrors = new Set();
+function readCoreJson(name) {
+  if (crashed || typeof edenModule?.[`_${name}`] !== 'function') return null;
+  try {
+    return JSON.parse(edenModule.ccall(name, 'string', [], []));
+  } catch (err) {
+    if (!coreReadErrors.has(name)) log(`${name}: ${err.message}`, 'err');
+    coreReadErrors.add(name);
+    return null;
+  }
+}
+
+function showCoreInfo() {
+  const capabilities = readCoreJson('eden_get_capabilities');
+  document.getElementById('engine-api').textContent = capabilities?.apiVersion ?? 'Legacy';
+  const core = findCore(capabilities?.cpuBackend) ?? runningCore;
+  document.getElementById('engine-cpu').textContent = core.name;
+  document.getElementById('cpu-core-active').textContent = core.name;
+  document.getElementById('renderer-backend').textContent = capabilities?.renderer ?? 'WebGPU';
+  const build = readCoreJson('eden_get_build_info');
+  if (capabilities) log(`Core API ${capabilities.apiVersion}: ${core.name}, ${capabilities.renderer}, audio ${capabilities.audio ?? 'unavailable'}.`, 'ui');
+  if (build?.describe) log(`Engine build: ${build.describe}, ${build.buildType}${build.devBuild ? ' (development)' : ''}${build.dirty ? ', modified source' : ''}.`, 'ui');
+  if (core.id !== runningCore.id) log(`Core mismatch: requested ${runningCore.name}, engine reports ${core.name}.`, 'err');
+}
+
+let titleInfoRead = false;
+function showRuntimeInfo(state) {
+  if (state === 2 && !titleInfoRead) {
+    const info = readCoreJson('eden_get_game_info');
+    if (info?.name) {
+      titleName.textContent = info.name;
+      titleName.title = [info.titleId, info.displayVersion].filter(Boolean).join(' · ');
+      log(`Game: ${info.name}, title ${info.titleId}${info.displayVersion ? `, version ${info.displayVersion}` : ''}.`, 'ui');
+      titleInfoRead = true;
+    }
+  }
+  const stats = readCoreJson('eden_get_runtime_stats');
+  if (!stats) return;
+  document.getElementById('engine-frames').textContent = String(stats.frames);
+  document.getElementById('engine-heap').textContent = `${(stats.heapBytes / 1048576).toFixed(0)} MB`;
+  document.getElementById('engine-shaders').textContent = `${stats.shaderCompiles} (${stats.shaderCompileFailures} failed)`;
+}
+
 function pollStatus() {
-  if (!edenModule) return;
+  if (!edenModule || crashed || memoryUnavailable) return;
   const state = edenModule._eden_get_state();
+  showRuntimeInfo(state);
   const name = EmuState[state] || `State ${state}`;
   wasmState.textContent = name;
   isRunning = state === 2;
@@ -470,18 +525,18 @@ function pollStatus() {
 }
 
 function startLoop() {
+  log('Controls: resume requested.', 'ui');
   edenModule?._eden_resume();
 }
 
 function pauseLoop() {
+  log('Controls: pause requested.', 'ui');
   edenModule?._eden_pause();
 }
 
-function stepOneFrame() {}
-
 function resetEmulation() {
   // The core does not support rebooting in place; reload the page to start over.
-  edenModule?._eden_shutdown();
+  if (!crashed) edenModule?._eden_shutdown();
   location.reload();
 }
 
@@ -513,7 +568,23 @@ async function findRomInArchive(file) {
 // Handle dropped or selected ROM file, or an archive holding one
 async function handleFile(file) {
   if (!file) return;
+  if (loadingRom || isRomLoaded) {
+    log('ROM selection ignored: a game is already loading or loaded.', 'ui');
+    return;
+  }
+  loadingRom = true;
+  fileInput.disabled = true;
+  browseBtn.disabled = true;
+  try {
+    await loadFile(file);
+  } finally {
+    loadingRom = false;
+    fileInput.disabled = isRomLoaded;
+    browseBtn.disabled = isRomLoaded;
+  }
+}
 
+async function loadFile(file) {
   let rom = { name: file.name, size: file.size, stream: async () => file.stream() };
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith('.keys')) {
@@ -527,10 +598,13 @@ async function handleFile(file) {
     }
     setRomStatus(`Opening ${file.name}...`);
     let found;
+    const openedAt = performance.now();
+    log(`Opening archive ${file.name} (${file.size} bytes).`, 'ui');
     try {
       found = await findRomInArchive(file);
     } catch (err) {
       setRomStatus(`Cannot open ${file.name}: ${err.message}`);
+      diagnostics.fail(null, err);
       alert(`Cannot open ${file.name}: ${err.message}`);
       return;
     }
@@ -540,6 +614,7 @@ async function handleFile(file) {
       return;
     }
     rom = found;
+    log(`Archive selected ${rom.name} (${rom.size} bytes) in ${((performance.now() - openedAt) / 1000).toFixed(1)} s.`, 'ui');
   } else if (!hasExtension(lowerName, ROM_EXTENSIONS)) {
     setRomStatus(`Unsupported ROM format "${file.name}".`);
     alert(`Unsupported ROM format "${file.name}".`);
@@ -550,84 +625,72 @@ async function handleFile(file) {
     return;
   }
 
-  if (!await inspectGpu()) {
-    setRomStatus('Cannot boot: WebGPU is unavailable. See the Renderer card for details. This runtime has no WebGL fallback.');
-    diagnostics.fail('environment', 'WebGPU is unavailable');
-    return;
-  }
-
-  await initWasmCore();
-  if (!isInitialized) {
-    alert('The Eden WebAssembly core is not ready.');
-    return;
-  }
-
-  currentRomName = rom.name;
-  titleName.textContent = rom.name;
-  fileLabel.textContent = rom.name;
-  titleSize.textContent = rom.size >= 0 ? `${(rom.size / (1024 * 1024)).toFixed(2)} MB` : 'Unknown';
-
-  // Raw compressed streams (game.nsp.xz) do not record the size, so progress shows bytes only.
-  loader.begin(Math.max(rom.size, 0));
   try {
-    wasmStatusText.textContent = 'Mounting keys & firmware...';
-    setRomStatus('Mounting keys & firmware...');
-    diagnostics.stage('system-files');
-    const mounted = await mountSystemFiles(edenModule.FS);
-    log(`Mounted ${mounted} system files into the Eden data directory.`, 'ui');
-    const restored = await restoreSaves(edenModule.FS).catch(err => {
-      log(`Could not restore in-game saves: ${err.message}`, 'err');
-      return 0;
-    });
-    if (restored) log(`Restored ${restored} in-game save files from the last save point.`, 'ui');
+    if (!await inspectGpu()) {
+      setRomStatus('Cannot boot: WebGPU is unavailable. See the Renderer card for details. This runtime has no WebGL fallback.');
+      diagnostics.fail('environment', 'WebGPU is unavailable');
+      return;
+    }
 
-    wasmStatusText.textContent = `Reading ${rom.name}...`;
-    setRomStatus(`Reading ${rom.name}...`);
-    const path = '/roms/' + rom.name;
-    edenModule.FS.mkdirTree('/roms');
-    loader.setPhase('copy');
-    diagnostics.stage('copy');
-    const stream = edenModule.FS.open(path, 'w');
-    const reader = (await rom.stream()).getReader();
+    await initWasmCore();
+    if (!isInitialized) {
+      alert('The Eden WebAssembly core is not ready.');
+      return;
+    }
+
+    currentRomName = rom.name;
+    titleName.textContent = rom.name;
+    fileLabel.textContent = rom.name;
+    titleSize.textContent = rom.size >= 0 ? `${(rom.size / (1024 * 1024)).toFixed(2)} MB` : 'Unknown';
+
+    // Raw compressed streams (game.nsp.xz) do not record the size, so progress shows bytes only.
+    loader.begin(Math.max(rom.size, 0));
     try {
-      let pos = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        edenModule.FS.write(stream, value, 0, value.length, pos);
-        pos += value.length;
-        loader.bytes = pos;
-      }
-      if (rom.size >= 0 && pos !== rom.size) {
-        throw new Error(`${rom.name} is truncated (${pos} of ${rom.size} bytes)`);
-      }
-    } finally {
-      reader.releaseLock();
-      edenModule.FS.close(stream);
-    }
-    loader.setPhase('boot');
-    diagnostics.stage('boot');
+      wasmStatusText.textContent = 'Mounting keys & firmware...';
+      setRomStatus('Mounting keys & firmware...');
+      diagnostics.stage('system-files');
+      const mounted = await mountSystemFiles(edenModule.FS);
+      log(`Mounted ${mounted} system files into the Eden data directory.`, 'ui');
+      const restored = await restoreSaves(edenModule.FS).catch(err => {
+        log(`Could not restore in-game saves: ${err.message}`, 'err');
+        return 0;
+      });
+      if (restored) log(`Restored ${restored} in-game save files from the last save point.`, 'ui');
 
-    if (edenModule.ccall('eden_boot', 'number', ['string'], [path]) !== 0) {
-      throw new Error('eden_boot rejected the request');
+      wasmStatusText.textContent = `Reading ${rom.name}...`;
+      setRomStatus(`Reading ${rom.name}...`);
+      const path = '/roms/' + rom.name;
+      edenModule.FS.mkdirTree('/roms');
+      loader.setPhase('copy');
+      diagnostics.stage('copy');
+      const copied = await mountRom(edenModule.FS, path, rom, bytes => { loader.bytes = bytes; });
+      log(`Mounted ${rom.name}: ${copied} bytes in ${((performance.now() - loader.copyStart) / 1000).toFixed(1)} s.`, 'ui');
+      loader.setPhase('boot');
+      diagnostics.stage('boot');
+
+      if (edenModule.ccall('eden_boot', 'number', ['string'], [path]) !== 0) {
+        throw new Error('eden_boot rejected the request');
+      }
+      isRomLoaded = true;
+      lastGameFile = file;
+      bootedAt = performance.now();
+      stopSaveWatch?.();
+      stopSaveWatch = watchSaves(() => edenModule?.FS, () => isRunning && !crashed, showSavePoint);
+      compat.startSession({ module: edenModule, rom, core: runningCore });
+      dropZone.style.display = 'none';
+      fileInput.disabled = true;
+      setRomStatus(`Booting ${rom.name}. Reload the page to load a different game.`);
+      statusTimer ??= setInterval(pollStatus, 500);
+    } catch (err) {
+      console.error('Failed to load ROM:', err.stack || err.message);
+      alert(`Failed to load ROM: ${err.message}`);
+      loader.fail();
+      wasmStatusText.textContent = 'ROM Load Failed';
+      setRomStatus(`ROM load failed: ${err.message}`);
+      diagnostics.fail(null, err);
     }
-    isRomLoaded = true;
-    lastGameFile = file;
-    bootedAt = performance.now();
-    stopSaveWatch?.();
-    stopSaveWatch = watchSaves(() => edenModule?.FS, () => isRunning && !crashed, showSavePoint);
-    compat.startSession({ module: edenModule, rom, core: runningCore });
-    dropZone.style.display = 'none';
-    fileInput.disabled = true;
-    setRomStatus(`Booting ${rom.name}. Reload the page to load a different game.`);
-    statusTimer ??= setInterval(pollStatus, 500);
-  } catch (err) {
-    console.error('Failed to load ROM:', err);
-    alert(`Failed to load ROM: ${err.message}`);
-    loader.fail();
-    wasmStatusText.textContent = 'ROM Load Failed';
-    setRomStatus(`ROM load failed: ${err.message}`);
-    diagnostics.fail(null, err);
+  } finally {
+    await rom.cancel?.().catch(() => {});
   }
 }
 
@@ -664,7 +727,6 @@ fileInput.addEventListener('change', () => {
 
 btnPlay.addEventListener('click', startLoop);
 btnPause.addEventListener('click', pauseLoop);
-btnStep.addEventListener('click', stepOneFrame);
 btnReset.addEventListener('click', resetEmulation);
 
 // Fullscreen: the stage (Joy-Con frame + screen) fills the display.
@@ -821,7 +883,6 @@ const RESUME_DIR = 'crash-resume';
 let lastGameFile = null;
 let bootedAt = 0;
 let stopSaveWatch = null;
-let crashed = false;
 let lastFrameAt = 0;
 const autoRestart = document.getElementById('auto-restart');
 const recoveryStatus = document.getElementById('recovery-status');
@@ -870,6 +931,10 @@ async function onCrash(reason) {
   // A reload for memory is already on its way; the errors that follow are not a game crash.
   if (crashed || !lastGameFile || memoryUnavailable) return;
   crashed = true;
+  try { edenModule?._eden_set_audio_volume?.(0, 1); } catch {}
+  btnPlay.disabled = true;
+  btnPause.disabled = true;
+  btnReset.disabled = false;
   stopSaveWatch?.();
   diagnostics.fail(/^no frames/.test(reason) ? 'hang' : 'crash', reason);
   // The engine logs a backtrace right after a guest fault; include it in the report.

@@ -12,6 +12,7 @@
 //   others warm (HTTP cache, compiled WebAssembly and installed system files kept).
 // --warmup <s> leaves the first <s> seconds after the first frame out of frame-time statistics.
 // --hang-samples <n> counts n frameless 2 s samples after the game has drawn as a hang (default 5).
+// --no-screenshots diagnoses screenshot stalls; visible-frame validation still fails without captures.
 // --no-present skips the canvas capture sampler (it copies every frame, which costs a little).
 // --scenario <name> names the scenario in results; --artifacts <dir> writes there instead.
 //   EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip EDEN_ROM=game.nsp node tests/e2e.mjs
@@ -22,7 +23,7 @@
 // 0 all runs passed, 1 a run failed, 2 the core or runtime is not available (unsupported).
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, appendFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
@@ -49,6 +50,7 @@ const { values: args } = parseArgs({
     warmup: { type: 'string', default: '10' },
     'hang-samples': { type: 'string', default: '5' },
     present: { type: 'boolean', default: true },
+    screenshots: { type: 'boolean', default: true },
     scenario: { type: 'string' },
     artifacts: { type: 'string' },
   },
@@ -80,7 +82,7 @@ const scenario = (index = 0) => ({
   warm: index > 0,
   settings: {
     core: args.core ?? DEFAULT_CORE.id, run: index + 1, of: repeat, warmupS, hangSamples, static: args.static,
-    headless: !args.headful, remote: Boolean(args.url), presentSampler: args.present,
+    headless: !args.headful, remote: Boolean(args.url), presentSampler: args.present, screenshots: args.screenshots,
     ...(args['crash-at'] ? { crashAt: Number(args['crash-at']) } : {}),
   },
 });
@@ -124,7 +126,7 @@ const browser = await puppeteer.launch({
   executablePath: chromePath,
   headless: !args.headful,
   userDataDir: profile,
-  protocolTimeout: 600_000,
+  protocolTimeout: 60_000,
   // --chrome-log prints Chrome's own log (GPU process errors, device losses) to stderr.
   dumpio: args['chrome-log'],
   args: ['--enable-unsafe-webgpu', '--enable-features=WebAssemblyMemory64',
@@ -151,6 +153,7 @@ async function runOnce(index) {
   const consoleLog = [];
   const report = { url, startedAt: new Date().toISOString(), run: index + 1, of: repeat, warm: index > 0, bootGame, checks: [], timeline: [], frames: [], errors: [] };
   const stamp = report.startedAt.replace(/[:.]/g, '-');
+  const consolePath = path.join(artifacts, `e2e-${stamp}-console.log`);
   const failures = [];
   // Every check names the failure category it stands for (see FAILURE_CATEGORIES).
   function check(name, ok, detail, category) {
@@ -167,6 +170,31 @@ async function runOnce(index) {
   let firstFrameAt = null;
 
   const page = await browser.newPage();
+  async function snapshot(file, canvas = false) {
+    const client = await page.createCDPSession();
+    try {
+      let clip;
+      if (canvas) {
+        clip = await page.$eval('#canvas', el => {
+          const r = el.getBoundingClientRect();
+          return { x: r.x + scrollX, y: r.y + scrollY, width: r.width, height: r.height, scale: 1 };
+        });
+      }
+      const { data } = await client.send('Page.captureScreenshot', {
+        format: 'png', captureBeyondViewport: false, ...(clip ? { clip } : {}),
+      }, { timeout: 15_000 });
+      const bytes = Buffer.from(data, 'base64');
+      await writeFile(file, bytes);
+      return bytes;
+    } catch (err) {
+      const message = `screenshot: ${path.basename(file)}: ${err.message}`;
+      report.errors.push(message);
+      console.log(message);
+      return null;
+    } finally {
+      await client.detach().catch(() => {});
+    }
+  }
   try {
     await page.setViewport({ width: 1400, height: 1000 });
     await page.evaluateOnNewDocument(installSampler);
@@ -178,14 +206,26 @@ async function runOnce(index) {
     report.crashes = [];
     const pageErrors = [];
     page.on('framenavigated', frame => { if (frame === page.mainFrame()) reloadingForMemory = false; });
+    page.on('dialog', async dialog => {
+      const text = `[${dialog.type()}] ${dialog.message()}`;
+      consoleLog.push(text);
+      appendFileSync(consolePath, text + '\n');
+      console.log(text);
+      await dialog.dismiss().catch(() => {});
+    });
     page.on('pageerror', error => {
       if (reloadingForMemory) return;
       report.errors.push(`pageerror: ${error.message}`);
       pageErrors.push({ booted: bootStart !== null, message: error.message });
+      if (pageErrors.length <= 5) {
+        consoleLog.push(error.stack);
+        appendFileSync(consolePath, error.stack + '\n');
+      }
     });
     page.on('console', message => {
       const text = message.text();
       consoleLog.push(text);
+      appendFileSync(consolePath, text + '\n');
       if (text.includes('Failed to allocate fallback buffer') && !reloadingForMemory) {
         reloadingForMemory = true;
         report.memoryReloads++;
@@ -288,6 +328,7 @@ async function runOnce(index) {
           return {
             status: document.getElementById('wasm-status-text').textContent,
             state: document.getElementById('wasm-state').textContent,
+            romStatus: document.getElementById('rom-status').textContent,
             fps,
             load: document.getElementById('rom-eta').hidden ? '' : document.getElementById('rom-eta').textContent,
             progress: document.getElementById('rom-progress').value,
@@ -311,12 +352,12 @@ async function runOnce(index) {
         }
         console.log(`  t=${sample.t}s ${sample.state} ${sample.fps.toFixed(1)} fps | ${sample.load}`);
         for (const loadStage of ['Reading', 'Booting', 'Loaded']) {
-          if (sample.load.startsWith(loadStage) && !shotStages.has(loadStage)) {
+          if (args.screenshots && sample.load.startsWith(loadStage) && !shotStages.has(loadStage)) {
             shotStages.add(loadStage);
-            await page.screenshot({ path: path.join(artifacts, `e2e-${stamp}-load-${loadStage.toLowerCase()}.png`) }).catch(() => {});
+            await snapshot(path.join(artifacts, `e2e-${stamp}-load-${loadStage.toLowerCase()}.png`));
           }
         }
-        if (sample.state === 'Failed') break;
+        if (sample.state === 'Failed' || /ROM Load Failed|Cannot boot|Cannot open/.test(sample.status + sample.romStatus)) break;
         if (args['crash-at'] && !report.crashInjectedAt) {
           const firstDrawn = report.timeline.find(entry => entry.fps > 0);
           if (firstDrawn && sample.t >= firstDrawn.t + Number(args['crash-at'])) {
@@ -326,19 +367,17 @@ async function runOnce(index) {
             console.log(`  simulated a crash at t=${sample.t}s`);
           }
         }
-        if (sample.t >= 10 * (shot + 1)) {
-          await page.screenshot({ path: path.join(artifacts, `e2e-${stamp}-${shot}.png`) }).catch(() => {});
+        if (args.screenshots && sample.t >= 10 * (shot + 1)) {
+          await snapshot(path.join(artifacts, `e2e-${stamp}-${shot}.png`));
           // A blank or single-colour canvas compresses to a few KB; a rendered game frame does not.
-          const frame = await page.$('#canvas')
-            .then(element => element.screenshot({ path: path.join(artifacts, `e2e-${stamp}-${shot}-canvas.png`) }))
-            .catch(() => null);
+          const frame = await snapshot(path.join(artifacts, `e2e-${stamp}-${shot}-canvas.png`), true);
           if (frame) report.frames.push({ t: sample.t, bytes: frame.length });
           shot++;
         }
       }
       game = mergeGameInfo(fileGame, await page.evaluate(() => window.__edenLab?.gameInfo()).catch(() => null));
 
-      const failedState = report.timeline.find(sample => sample.state === 'Failed');
+      const failedState = report.timeline.find(sample => sample.state === 'Failed' || /ROM Load Failed|Cannot boot|Cannot open/.test(sample.status + sample.romStatus));
       if (core) {
         const reported = consoleLog.find(line => line.includes('CPU core: ') && line.includes('Frontend'));
         check('engine uses selected core', reported?.includes(`CPU core: ${core.name}`), reported?.replace(/.*CPU core: /, '').replace(/\x1b\[[0-9;]*m/g, '') ?? 'not logged', 'init');
@@ -391,7 +430,10 @@ async function runOnce(index) {
 
     check('no page errors', pageErrors.length === 0, pageErrors[0]?.message, pageErrors[0]?.booted ? 'crash' : 'init');
     check('no failed requests', report.errors.filter(error => /^(requestfailed|HTTP)/.test(error)).length === 0, undefined, 'artifact');
-    await page.screenshot({ path: path.join(artifacts, `e2e-${stamp}-final.png`) });
+    if (args.screenshots) {
+      await snapshot(path.join(artifacts, `e2e-${stamp}-final.png`));
+      check('screenshots captured', !report.errors.some(error => error.startsWith('screenshot:')), undefined, 'environment');
+    }
   } catch (err) {
     // An exception mid-run must fail the run, not end it with only the checks made so far.
     const category = { environment: 'environment', init: 'init', 'system-files': 'system-files', boot: 'boot', running: 'crash' }[stage];

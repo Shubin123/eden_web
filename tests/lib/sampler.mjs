@@ -29,8 +29,18 @@ export function installSampler() {
     enumerable: true,
     get: () => factory,
     set(value) {
-      factory = typeof value !== 'function' ? value
-        : (...args) => Promise.resolve(value(...args)).then(module => (lab.module = module));
+      factory = typeof value !== 'function' ? value : (options = {}) => {
+        const printErr = options.printErr;
+        const onAbort = options.onAbort;
+        return Promise.resolve(value({
+          ...options,
+          printErr(text) {
+            if (/worker sent an error|Aborted\(|RuntimeError|Core\.ARM <Critical>/.test(String(text))) lab.crashed = true;
+            printErr?.(text);
+          },
+          onAbort(reason) { lab.crashed = true; onAbort?.(reason); },
+        })).then(module => (lab.module = module));
+      };
     },
   });
   // The shared Memory64 the runtime creates, for reading what engine exports write.
@@ -89,6 +99,7 @@ export function installSampler() {
   const MAX_FRAMES = 1024;
   let frameBuffer = null;
   lab.drainEngine = () => {
+    if (lab.crashed) return null;
     const fn = lab.module?._eden_get_frame_times;
     if (!fn) return null;
     frameBuffer ??= alloc(MAX_FRAMES * 8);
@@ -112,6 +123,7 @@ export function installSampler() {
   /// What the runtime knows about the running game: JSON from eden_get_game_info, which either
   /// returns a string or fills a (buffer, size) pair.
   lab.gameInfo = () => {
+    if (lab.crashed) return null;
     const fn = lab.module?._eden_get_game_info;
     if (!fn || !heap()) return null;
     let text;

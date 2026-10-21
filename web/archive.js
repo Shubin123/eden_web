@@ -20,12 +20,15 @@ export function isArchive(name) {
 export function openArchive(file, { romExtensions, systemExtensions }) {
   const worker = new Worker(new URL('./archive-worker.js', import.meta.url), { type: 'module' });
   let pending = null;
+  let failure = null;
   const fail = (err) => {
+    failure = err;
     worker.terminate();
     pending?.reject(err);
     pending = null;
   };
-  const next = () => new Promise((resolve, reject) => { pending = { resolve, reject }; });
+  const next = () => failure ? Promise.reject(failure)
+    : new Promise((resolve, reject) => { pending = { resolve, reject }; });
 
   worker.onerror = (e) => fail(new Error(e.message || 'the archive worker failed to start'));
   worker.onmessage = ({ data }) => {
@@ -65,6 +68,6 @@ export function openArchive(file, { romExtensions, systemExtensions }) {
         worker.terminate();
       },
     }, { highWaterMark: 2 });
-    return { rom: { name: result.name, size: result.size, stream: async () => stream } };
+    return { rom: { name: result.name, size: result.size, stream: async () => stream, cancel: () => stream.cancel() } };
   })();
 }
