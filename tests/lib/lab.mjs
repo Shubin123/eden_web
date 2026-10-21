@@ -118,11 +118,12 @@ export function summarizeRuns(results) {
   return summary;
 }
 
-/// Which runs are repeats of each other: same game, core, scenario and cold/warm start.
+/// Which runs are repeats of each other: same game, core, scenario (and length) and cold/warm start.
 export function groupKey(result) {
   const game = result.game?.titleId ?? result.game?.name ?? result.game?.file ?? 'no-game';
   const core = result.core?.id ?? 'default';
-  const scenario = result.scenario?.name ?? 'default';
+  const seconds = result.scenario?.seconds;
+  const scenario = `${result.scenario?.name ?? 'default'}${seconds ? ` ${seconds}s` : ''}`;
   const start = result.scenario?.warm ? 'warm' : 'cold';
   return `${game} | ${core} | ${scenario} | ${start}`;
 }

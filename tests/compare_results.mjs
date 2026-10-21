@@ -56,11 +56,11 @@ assert.equal(candidate.length, 8);
 const report = compareSets(baseline, candidate);
 const summary = report.findings.map(f => `${f.kind} ${f.run} ${f.what}`).sort();
 assert.deepEqual(summary, [
-  'improvement Pikmin 1 | jit | boot-60s | cold outcome',
-  'info Captain Toad Treasure Tracker | jit | crash-recovery | cold new',
-  'regression Blaster Master Zero 3 | interpreter | boot-60s | cold outcome',
-  'regression Captain Toad Treasure Tracker | interpreter | boot-60s | cold failure',
-  'regression Captain Toad Treasure Tracker | jit | boot-60s | warm frameTime.p99',
+  'improvement Pikmin 1 | jit | boot 60s | cold outcome',
+  'info Captain Toad Treasure Tracker | jit | crash-recovery 60s | cold new',
+  'regression Blaster Master Zero 3 | interpreter | boot 60s | cold outcome',
+  'regression Captain Toad Treasure Tracker | interpreter | boot 60s | cold failure',
+  'regression Captain Toad Treasure Tracker | jit | boot 60s | warm frameTime.p99',
 ]);
 // A looser threshold hides the p99 change; the outcome regressions stay.
 assert.equal(compareSets(baseline, candidate, { threshold: 1 }).regressions.length, 2);

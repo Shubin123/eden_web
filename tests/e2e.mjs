@@ -64,7 +64,7 @@ const repeat = Math.max(1, Number(args.repeat) || 1);
 const warmupS = Number(args.warmup) || 0;
 const hangSamples = Math.max(1, Number(args['hang-samples']) || 5);
 const artifacts = path.resolve(args.artifacts ?? path.join(root, 'artifacts'));
-const scenarioName = args.scenario ?? (args['crash-at'] ? 'crash-recovery' : bootGame ? `boot-${args.seconds}s` : 'core-ready');
+const scenarioName = args.scenario ?? (args['crash-at'] ? 'crash-recovery' : bootGame ? 'boot' : 'core-ready');
 const fileGame = rom ? gameFromFile(rom) : null;
 
 for (const file of [keys, firmware, rom].filter(Boolean)) {

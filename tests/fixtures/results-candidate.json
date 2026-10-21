@@ -32,7 +32,7 @@
     "hardwareConcurrency": 16
    },
    "scenario": {
-    "name": "boot-60s",
+    "name": "boot",
     "seconds": 60,
     "warm": false,
     "settings": {
@@ -83,7 +83,7 @@
     "hardwareConcurrency": 16
    },
    "scenario": {
-    "name": "boot-60s",
+    "name": "boot",
     "seconds": 60,
     "warm": true,
     "settings": {
@@ -134,7 +134,7 @@
     "hardwareConcurrency": 16
    },
    "scenario": {
-    "name": "boot-60s",
+    "name": "boot",
     "seconds": 60,
     "warm": true,
     "settings": {
@@ -185,7 +185,7 @@
     "hardwareConcurrency": 16
    },
    "scenario": {
-    "name": "boot-60s",
+    "name": "boot",
     "seconds": 60,
     "warm": true,
     "settings": {
@@ -236,7 +236,7 @@
     "hardwareConcurrency": 16
    },
    "scenario": {
-    "name": "boot-60s",
+    "name": "boot",
     "seconds": 60,
     "warm": false,
     "settings": {
@@ -279,7 +279,7 @@
     "hardwareConcurrency": 16
    },
    "scenario": {
-    "name": "boot-60s",
+    "name": "boot",
     "seconds": 60,
     "warm": false,
     "settings": {
@@ -330,7 +330,7 @@
     "hardwareConcurrency": 16
    },
    "scenario": {
-    "name": "boot-60s",
+    "name": "boot",
     "seconds": 60,
     "warm": false,
     "settings": {
