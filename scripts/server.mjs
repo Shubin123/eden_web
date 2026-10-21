@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -39,9 +39,19 @@ export function createServer({ isolation = true } = {}) {
         response.end();
         return;
       }
+      // A validator lets the browser revalidate cached files with a 304, so a second page load
+      // reuses its HTTP cache and compiled WebAssembly, as it does on GitHub Pages.
+      const info = await stat(file);
+      const etag = `"${info.size.toString(16)}-${Math.floor(info.mtimeMs).toString(16)}"`;
+      if (request.headers['if-none-match'] === etag) {
+        response.writeHead(304, { ...headers, ETag: etag });
+        response.end();
+        return;
+      }
       const data = await readFile(file);
       response.writeHead(200, {
         ...headers,
+        ETag: etag,
         'Content-Type': mime[path.extname(file)] || 'application/octet-stream',
         'Content-Length': data.length
       });
