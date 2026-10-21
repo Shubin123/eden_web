@@ -90,8 +90,8 @@ const wasmModule = new WebAssembly.Module(wasmBytes);
 const moduleExports = new Set(WebAssembly.Module.exports(wasmModule).map(({name}) => name));
 
 for (const name of expectedExports) {
-    // The optimizer minifies export names; the glue maps each C symbol to its export.
-    const match = glue.match(new RegExp(`_${name}=Module\\["_${name}"\\]=wasmExports\\["([^"]+)"\\]`));
+    // Release links minify export names; the glue maps each C symbol to its export.
+    const match = glue.match(new RegExp(`_${name}\\s*=\\s*Module\\["_${name}"\\]\\s*=\\s*wasmExports\\["([^"]+)"\\]`));
     assert.ok(match, `missing ${name} in generated JS`);
     assert.ok(moduleExports.has(match[1]), `eden.wasm missing export ${match[1]} for ${name}`);
 }
