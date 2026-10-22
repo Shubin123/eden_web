@@ -138,9 +138,24 @@ async function runScenario(lab, scenario, rom, runDir, baseline, progress) {
     let origin = 0;
     const engineTimes = () => session.page.evaluate(() => window.__edenLab.drainEngine?.() ?? []);
     await engineTimes();
-    let segmentStart = { frame: 0, time: Date.now() };
+    let segmentStart = { frame: 0, time: Date.now(), exec: await session.execStats() };
+    // Guest CPU work per segment: millions of guest cycles per real second (all cores and core 0),
+    // and per second the cores spent executing, which keeps measuring emulation speed when a
+    // game sits at its frame cap.
+    const guestRates = (from, to) => {
+      if (!from || !to) return null;
+      const seconds = Math.max(0.001, (to.at - from.at) / 1000);
+      const delta = to.cycles.map((c, i) => c - from.cycles[i]);
+      const busy = to.busyMs.reduce((s, ms, i) => s + ms - from.busyMs[i], 0) / 1000;
+      const cycles = delta.reduce((a, b) => a + b, 0);
+      return {
+        mcps: round(cycles / seconds / 1e6),
+        core0Mcps: round(delta[0] / seconds / 1e6),
+        busyMcps: busy > 0 ? round(cycles / busy / 1e6) : null,
+      };
+    };
     const endSegment = async name => {
-      const now = { frame: await session.frame(), time: Date.now() };
+      const now = { frame: await session.frame(), time: Date.now(), exec: await session.execStats() };
       const fps = (now.frame - segmentStart.frame) / Math.max(0.001, (now.time - segmentStart.time) / 1000);
       const times = await engineTimes();
       const ms = [];
@@ -150,6 +165,7 @@ async function runScenario(lab, scenario, rom, runDir, baseline, progress) {
         until: name, fps: round(fps),
         frameMs: stats ? { p50: round(stats.p50), p95: round(stats.p95), p99: round(stats.p99) } : null,
         stutters: stats?.stutters ?? null,
+        guest: guestRates(segmentStart.exec, now.exec),
       });
     };
     const shoot = async name => {
@@ -172,7 +188,7 @@ async function runScenario(lab, scenario, rom, runDir, baseline, progress) {
         const shot = await shoot(step.checkpoint);
         result.checkpoints.push({ name: step.checkpoint, frame: shot.frame, file: shot.file, grey: shot.grey, spread: round(spread(shot.grey)), minSpread: step.minSpread });
         await session.resume();
-        segmentStart = { frame: await session.frame(), time: Date.now() };
+        segmentStart = { frame: await session.frame(), time: Date.now(), exec: await session.execStats() };
       } else if (step.anchor) {
         await endSegment(step.anchor);
         const reference = baseline?.checkpoints.find(c => c.name === step.anchor && c.anchor);
@@ -196,7 +212,7 @@ async function runScenario(lab, scenario, rom, runDir, baseline, progress) {
         origin = shot.frame - step.frame;
         result.checkpoints.push({ name: step.anchor, anchor: true, frame: shot.frame, file: shot.file, grey: shot.grey, spread: round(spread(shot.grey)) });
         await session.resume();
-        segmentStart = { frame: await session.frame(), time: Date.now() };
+        segmentStart = { frame: await session.frame(), time: Date.now(), exec: await session.execStats() };
       } else if (step.slotRoundTrip) {
         await endSegment(`slot-${step.slotRoundTrip}`);
         // A game must have used its save before it is replaced by the slot.
@@ -206,7 +222,7 @@ async function runScenario(lab, scenario, rom, runDir, baseline, progress) {
         result.slots.push({ slot: step.slotRoundTrip, files: trip.saved });
         expected = trip.slotFiles;
         origin = 0;
-        segmentStart = { frame: 0, time: Date.now() };
+        segmentStart = { frame: 0, time: Date.now(), exec: await session.execStats() };
       } else if (step.exportSave) {
         const file = path.join(runDir, step.exportSave);
         await writeFile(file, await session.exportSaves());
@@ -311,7 +327,7 @@ try {
         saveNote,
         ...run.slots.map(s => `slot ${s.slot} round trip (${s.files} files)${run.slotCheck?.ok ? ' read back' : ''}`),
         ...run.checkpoints.map(c => `${c.name}@${c.frame}${c.diff_baseline !== undefined ? ` diff ${c.diff_baseline}` : ''}`),
-        ...run.segments.map(s => `${s.until} ${s.fps} fps${s.frameMs ? ` p95 ${s.frameMs.p95} ms` : ''}`),
+        ...run.segments.map(s => `${s.until} ${s.fps} fps${s.frameMs ? ` p95 ${s.frameMs.p95} ms` : ''}${s.guest ? ` ${s.guest.mcps} Mcyc/s` : ''}`),
       ].join(', ');
       progress.log(`${run.problems.length ? 'FAIL' : 'PASS'} ${scenario.id}${repeat > 1 ? ` #${i + 1}` : ''} (${run.seconds} s): ${detail}`);
       for (const problem of run.problems) progress.log(`  - ${problem}`);

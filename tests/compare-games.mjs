@@ -6,7 +6,9 @@
 //
 //   node tests/compare-games.mjs main=artifacts/games-a/games.json upstream-sync=artifacts/games-b/games.json
 // The first report is the reference. A segment counts as a regression when its median game fps
-// drops more than --fps-tolerance percent (default 10) or its p95 frame time rises more than that.
+// drops more than --fps-tolerance percent (default 10), its p95 frame time rises more than that, or
+// its guest cycles per busy second drop more than that. Guest CPU work (million guest cycles per real second, and per second the cores spent executing)
+// is tabled too, so a build that emulates faster shows up even when the game is frame-capped.
 
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -72,6 +74,9 @@ function summarize(report) {
         p50: median(list.map(s => s.frameMs?.p50)),
         p95: median(list.map(s => s.frameMs?.p95)),
         p99: median(list.map(s => s.frameMs?.p99)),
+        mcps: median(list.map(s => s.guest?.mcps)),
+        core0: median(list.map(s => s.guest?.core0Mcps)),
+        busy: median(list.map(s => s.guest?.busyMcps)),
       }])),
       checkpoints: new Map([...checkpoints].map(([name, list]) => [name, {
         frame: median(list.map(c => c.frame)),
@@ -99,6 +104,7 @@ for (const id of ids) {
   const segmentNames = [...new Set(summaries.flatMap(s => [...(s.scenarios.get(id)?.segments.keys() ?? [])]))];
   lines.push(`| Segment | ${summaries.map(s => `${s.label} fps (min–max)`).join(' | ')} | ${summaries.map(s => `${s.label} frame ms p50 / p95 / p99`).join(' | ')} |`);
   lines.push(`|---|${summaries.map(() => '---:').join('|')}|${summaries.map(() => '---:').join('|')}|`);
+  const guestRows = [];
   const regressions = new Map(summaries.slice(1).map(s => [s.label, []]));
   const improvements = new Map(summaries.slice(1).map(s => [s.label, []]));
   for (const name of segmentNames) {
@@ -114,15 +120,27 @@ for (const id of ids) {
       return seg ? `${fmt(seg.p50)} / ${fmt(seg.p95)} / ${fmt(seg.p99)}` : '–';
     });
     lines.push(`| ${name} | ${fpsCells.join(' | ')} | ${timeCells.join(' | ')} |`);
+    guestRows.push(`| ${name} | ${summaries.map(s => {
+      const seg = s.scenarios.get(id)?.segments.get(name);
+      if (!seg || !Number.isFinite(seg.mcps)) return '–';
+      return `${fmt(seg.mcps)}${s === reference ? '' : delta(seg.mcps, ref?.mcps)} / ${fmt(seg.core0)} / ${fmt(seg.busy)}${s === reference ? '' : delta(seg.busy, ref?.busy)}`;
+    }).join(' | ')} |`);
     if (!ref || name === 'end') continue;
     for (const s of summaries.slice(1)) {
       const seg = s.scenarios.get(id)?.segments.get(name);
       if (!seg) continue;
-      if (seg.fps < ref.fps * (1 - tolerance) || seg.p95 > ref.p95 * (1 + tolerance)) regressions.get(s.label).push(name);
-      else if (seg.fps > ref.fps * (1 + tolerance)) improvements.get(s.label).push(name);
+      const slowerCpu = Number.isFinite(seg.busy) && Number.isFinite(ref.busy) && seg.busy < ref.busy * (1 - tolerance);
+      const fasterCpu = Number.isFinite(seg.busy) && Number.isFinite(ref.busy) && seg.busy > ref.busy * (1 + tolerance);
+      if (seg.fps < ref.fps * (1 - tolerance) || seg.p95 > ref.p95 * (1 + tolerance) || slowerCpu) regressions.get(s.label).push(name);
+      else if (seg.fps > ref.fps * (1 + tolerance) || fasterCpu) improvements.get(s.label).push(name);
     }
   }
   lines.push('');
+  if (guestRows.some(row => !/^\| [^|]+ \|( – \|)+$/.test(row))) {
+    lines.push(`Guest CPU work, million guest cycles per real second (all cores / core 0) and per second of execution:`, '');
+    lines.push(`| Segment | ${summaries.map(s => `${s.label} Mcyc/s / core 0 / per busy s`).join(' | ')} |`, `|---|${summaries.map(() => '---:').join('|')}|`);
+    lines.push(...guestRows, '');
+  }
   const checkpointNames = [...new Set(summaries.flatMap(s => [...(s.scenarios.get(id)?.checkpoints.keys() ?? [])]))];
   if (checkpointNames.length) {
     lines.push(`| Checkpoint | ${summaries.map(s => `${s.label} diff from baseline`).join(' | ')} |`, `|---|${summaries.map(() => '---:').join('|')}|`);

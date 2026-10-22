@@ -334,6 +334,19 @@ export async function openGame(lab, { rom, save = null, titleId = null, core = n
       bootFrames = await absolute();
       return { saved: slotFiles.length, slotFiles };
     },
+    /// Cumulative guest cycles and host busy time per emulated core, from the engine's runtime
+    /// stats (null on engines that do not report them).
+    async execStats() {
+      const stats = await page.evaluate(() => {
+        try {
+          return JSON.parse(window.__edenLab.module.ccall('eden_get_runtime_stats', 'string', [], []));
+        } catch {
+          return null;
+        }
+      });
+      if (!stats?.guestCycles) return null;
+      return { at: Date.now(), cycles: stats.guestCycles, busyMs: stats.guestBusyMs };
+    },
     async fps() {
       return page.evaluate(() => window.__edenLab.module._eden_get_game_fps());
     },
