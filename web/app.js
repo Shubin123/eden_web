@@ -20,6 +20,8 @@ import {
   watchSaves,
   savePointInfo,
   clearSaves,
+  exportSaves,
+  importSaves,
   recordCrash,
   listCrashes,
   clearCrashes,
@@ -1050,6 +1052,7 @@ async function resumeAfterCrash() {
 }
 
 function showSavePoint(meta) {
+  document.getElementById('btn-saves-export').disabled = !meta?.files;
   if (!meta) return;
   const kb = (meta.bytes / 1024).toFixed(0);
   document.getElementById('save-point').textContent =
@@ -1080,6 +1083,56 @@ document.getElementById('btn-saves-clear').addEventListener('click', async () =>
   if (!confirm('Delete the in-game saves stored in this browser? This cannot be undone.')) return;
   await clearSaves();
   document.getElementById('save-point').textContent = 'None yet';
+  showSavePoint(null);
+});
+const savesStatus = document.getElementById('saves-status');
+const savesImportInput = document.getElementById('saves-import-input');
+document.getElementById('btn-saves-export').addEventListener('click', async () => {
+  try {
+    const zip = await exportSaves();
+    if (!zip) {
+      savesStatus.textContent = 'There are no stored saves to export yet.';
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(zip);
+    link.download = `eden-saves-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    savesStatus.textContent = `Exported ${(zip.size / 1024).toFixed(0)} KB of saves.`;
+  } catch (err) {
+    savesStatus.textContent = `Export failed: ${err.message}`;
+  }
+});
+document.getElementById('btn-saves-import').addEventListener('click', () => savesImportInput.click());
+savesImportInput.addEventListener('change', async () => {
+  const files = [...savesImportInput.files];
+  savesImportInput.value = '';
+  if (!files.length) return;
+  // A running game would overwrite the import with its own saves at the next save point.
+  if (isRomLoaded) {
+    if (!confirm('Imported saves load when a game boots. Stop the running game and reload the page now? Progress since the last save point is lost.')) return;
+    stopSaveWatch?.();
+    stopSaveWatch = null;
+  }
+  const done = [];
+  try {
+    for (const file of files) {
+      const result = await importSaves(file);
+      done.push(result);
+      showSavePoint(result.meta);
+    }
+    const count = done.reduce((sum, r) => sum + r.files, 0);
+    const titles = [...new Set(done.flatMap(r => r.titles))];
+    savesStatus.textContent = `Imported ${count} save files${titles.length ? ` for ${titles.join(', ')}` : ''}. They load the next time a game boots.`;
+    log(savesStatus.textContent, 'ui');
+    if (isRomLoaded) location.reload();
+  } catch (err) {
+    savesStatus.textContent = `Import failed: ${err.message}`;
+    if (isRomLoaded && !stopSaveWatch) {
+      stopSaveWatch = watchSaves(() => edenModule?.FS, () => isRunning && !crashed, showSavePoint);
+    }
+  }
 });
 try {
   autoRestart.checked = localStorage.getItem('eden-auto-restart') !== 'off';

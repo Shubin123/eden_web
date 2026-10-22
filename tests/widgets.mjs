@@ -170,6 +170,24 @@ try {
   });
   check('first in-game save persists and restores', saves.bytes.join(',') === '9,2,7' && saves.files > 0);
 
+  const roundTrip = await page.evaluate(async () => {
+    const { importSaves, exportSaves, restoreSaves, clearSaves } = await import('./recovery.js');
+    const { EDEN_DATA_ROOT, readZipEntries, writeZip } = await import('./system-files.js');
+    const FS = window.__edenLab.module.FS;
+    const name = 'nand/user/save/0000000000000000/0123456789ABCDEF0123456789ABCDEF/0100000000010000/slot.sav';
+    try {
+      const imported = await importSaves(new File([writeZip([{ name: `eden/${name}`, data: new Uint8Array([4, 5, 6]) }])], 'in.zip'));
+      const exported = await readZipEntries(new File([await exportSaves()], 'out.zip'));
+      await restoreSaves(FS);
+      const bytes = Array.from(FS.readFile(`${EDEN_DATA_ROOT}/${name}`));
+      FS.unlink(`${EDEN_DATA_ROOT}/${name}`);
+      return { files: imported.files, titles: imported.titles, exported: exported.map(e => e.name), bytes };
+    } finally { await clearSaves(); }
+  });
+  check('saves import from and export to ZIP', roundTrip.files === 1 && roundTrip.titles[0] === '0100000000010000' &&
+    roundTrip.exported.includes('nand/user/save/0000000000000000/0123456789ABCDEF0123456789ABCDEF/0100000000010000/slot.sav') &&
+    roundTrip.bytes.join(',') === '4,5,6');
+
   await page.select('#screen-filter', 'pixelated');
   check('renderer scaling setting applies', await page.$eval('#screen-stage', e => e.classList.contains('is-pixelated')));
   await page.click('#btn-fullscreen-stage');

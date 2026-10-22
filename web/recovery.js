@@ -3,9 +3,10 @@
 //
 // Save points: the save folders in the engine's in-memory filesystem are copied to IndexedDB
 // whenever they change and then stay unchanged for a poll interval, so a snapshot is never taken
-// halfway through the game writing a save. Every boot restores the latest snapshot.
+// halfway through the game writing a save. Every boot restores the latest snapshot. Save points
+// can be exported to and imported from ZIP archives.
 
-import { EDEN_DATA_ROOT } from './system-files.js';
+import { EDEN_DATA_ROOT, readZipEntries, writeZip } from './system-files.js';
 
 // nand/system/save holds the user profile; user saves are filed under its id, so both are needed.
 const SAVE_DIRS = ['nand/user/save', 'nand/system/save'];
@@ -110,6 +111,72 @@ export async function savePointInfo() {
 
 export async function clearSaves() {
   await withStore(SAVES, 'readwrite', store => store.clear());
+}
+
+async function storedSaves() {
+  return withStore(SAVES, 'readonly', async store => {
+    const [keys, values] = await Promise.all([requestResult(store.getAllKeys()), requestResult(store.getAll())]);
+    return keys.map((key, i) => [key, values[i]]).filter(([key]) => key !== META_KEY);
+  });
+}
+
+/// Packs the stored save point into a ZIP laid out like Eden's data directory, so it can be
+/// unpacked into a desktop Eden or yuzu user folder. Returns null when nothing is stored.
+export async function exportSaves() {
+  const entries = await storedSaves();
+  if (!entries.length) return null;
+  const files = await Promise.all(entries.map(async ([name, blob]) =>
+    ({ name, data: new Uint8Array(await blob.arrayBuffer()) })));
+  return writeZip(files);
+}
+
+const TITLE_ID = /^01[0-9a-f]{14}$/i;
+const PROFILE_SAVE = /^nand\/user\/save\/0000000000000000\/([0-9a-f]{32})\//i;
+
+/// Maps an archive entry to its stored save path. Entries under nand/user/save or
+/// nand/system/save keep their layout; a bare title ID folder (as other emulators export it) goes
+/// to `profile`'s save folder. Returns null for entries that are not save data.
+export function savePathFor(name, profile) {
+  const parts = name.replace(/\\/g, '/').split('/').filter(part => part && part !== '.');
+  if (parts.includes('..')) throw new Error(`${name}: unsafe path`);
+  const base = parts.at(-1) ?? '';
+  if (parts[0] === '__MACOSX' || base === '.DS_Store' || base.startsWith('._')) return null;
+  const lower = parts.map(part => part.toLowerCase());
+  for (let i = 0; i + 3 < parts.length; i++) {
+    if (lower[i] === 'nand' && (lower[i + 1] === 'user' || lower[i + 1] === 'system') && lower[i + 2] === 'save') {
+      return [`nand/${lower[i + 1]}/save`, ...parts.slice(i + 3)].join('/');
+    }
+  }
+  const title = parts.findIndex(part => TITLE_ID.test(part));
+  if (title < 0 || title === parts.length - 1) return null;
+  if (!profile) throw new Error('No user profile yet: boot any game once, then import again');
+  return [`nand/user/save/0000000000000000/${profile}`, parts[title].toUpperCase(), ...parts.slice(title + 1)].join('/');
+}
+
+/// Merges the saves in a ZIP into the stored save point; they are written into the game on the
+/// next boot. Returns { files, bytes, titles }.
+export async function importSaves(file) {
+  const existing = await storedSaves();
+  const profile = existing.map(([key]) => PROFILE_SAVE.exec(key)?.[1]).find(Boolean);
+  const imported = [];
+  const titles = new Set();
+  for (const entry of await readZipEntries(file)) {
+    const path = savePathFor(entry.name, profile);
+    if (!path) continue;
+    if (!entry.supported) throw new Error(`${entry.name}: unsupported ZIP compression`);
+    imported.push([path, await entry.blob()]);
+    const title = path.split('/').find(part => TITLE_ID.test(part));
+    if (title && path.startsWith('nand/user/')) titles.add(title.toUpperCase());
+  }
+  if (!imported.length) throw new Error(`${file.name} holds no save data`);
+  const merged = new Map([...existing, ...imported]);
+  const meta = { time: Date.now(), files: merged.size, bytes: 0 };
+  for (const blob of merged.values()) meta.bytes += blob.size;
+  await withStore(SAVES, 'readwrite', store => {
+    for (const [path, blob] of imported) store.put(blob, path);
+    store.put(meta, META_KEY);
+  });
+  return { files: imported.length, bytes: imported.reduce((sum, [, blob]) => sum + blob.size, 0), titles: [...titles], meta };
 }
 
 /// Polls the save folders while `healthy()` holds and stores a save point once a change has

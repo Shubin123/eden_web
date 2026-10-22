@@ -169,6 +169,61 @@ export async function readZipEntries(file) {
   });
 }
 
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+
+function crc32(data) {
+  let crc = 0xffffffff;
+  for (const byte of data) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+/// Packs [{ name, data: Uint8Array }] into an uncompressed ZIP archive.
+export function writeZip(files, time = new Date()) {
+  const encoder = new TextEncoder();
+  const dosTime = (time.getHours() << 11) | (time.getMinutes() << 5) | (time.getSeconds() >> 1);
+  const dosDate = ((time.getFullYear() - 1980) << 9) | ((time.getMonth() + 1) << 5) | time.getDate();
+  const parts = [];
+  const central = [];
+  let offset = 0;
+  for (const { name, data } of files) {
+    const nameBytes = encoder.encode(name);
+    if (offset + data.length > 0xfffffff0) throw new Error('Archive would exceed 4 GB');
+    const header = (size, signature) => {
+      const view = new DataView(new ArrayBuffer(size));
+      view.setUint32(0, signature, true);
+      return view;
+    };
+    // Version 20, UTF-8 names, stored.
+    const local = header(30, 0x04034b50);
+    const fields = [[4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, dosTime, 2], [12, dosDate, 2],
+      [14, crc32(data), 4], [18, data.length, 4], [22, data.length, 4], [26, nameBytes.length, 2]];
+    for (const [at, value, width] of fields) {
+      width === 2 ? local.setUint16(at, value, true) : local.setUint32(at, value, true);
+    }
+    const entry = header(46, 0x02014b50);
+    entry.setUint16(4, 20, true);
+    for (const [at, value, width] of fields) {
+      width === 2 ? entry.setUint16(at + 2, value, true) : entry.setUint32(at + 2, value, true);
+    }
+    entry.setUint32(42, offset, true);
+    parts.push(local, nameBytes, data);
+    central.push(entry, nameBytes);
+    offset += 30 + nameBytes.length + data.length;
+  }
+  const cdSize = central.reduce((sum, part) => sum + part.byteLength, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, files.length, true);
+  end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true);
+  end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, end], { type: 'application/zip' });
+}
+
 function baseName(name) {
   return name.split('/').pop();
 }

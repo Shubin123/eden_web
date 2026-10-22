@@ -334,7 +334,7 @@
       </div>
 
       <div class="card" id="save-state-card" data-widget="save-states"
-           data-settings="save and restore slots (not available yet)">
+           data-settings="in-game save import and export; save-state slots (not available yet)">
         <h2>Save States</h2>
         <div class="save-toolbar">
           <select id="save-state-slot" class="renderer-select" aria-label="Save-state slot" disabled>
@@ -344,10 +344,18 @@
         </div>
         <div class="save-empty">No save states.</div>
         <div class="stat-row"><span class="label">In-game save point</span><span id="save-point" class="value">None yet</span></div>
-        <button class="btn" id="btn-saves-clear">Delete stored in-game saves</button>
+        <div class="core-actions">
+          <button class="btn" id="btn-saves-import">Import saves</button>
+          <button class="btn" id="btn-saves-export" disabled>Export</button>
+          <button class="btn" id="btn-saves-clear">Delete</button>
+        </div>
+        <input type="file" id="saves-import-input" accept=".zip,application/zip" multiple hidden>
+        <div id="saves-status" class="mode-help" aria-live="polite"></div>
         <div class="mode-help" style="margin-top:7px;">
           The Eden core does not expose save states yet. In-game saves are copied to this browser shortly
           after the game writes them, and restored every time a game boots, including after a crash.
+          Export downloads them as a ZIP in Eden's folder layout. Import takes that ZIP or a zipped desktop
+          Eden or yuzu save folder; imported saves load at the next boot.
         </div>
       </div>
 
