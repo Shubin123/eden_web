@@ -61,73 +61,73 @@
   <div class="layout-menu-backdrop" id="layout-menu-backdrop" hidden></div>
 
   <div class="main-layout">
-    <div class="canvas-panel">
-      <div id="screen-stage" class="screen-stage">
-        <div class="switch-device" id="switch-device">
-          <div class="joycon neon-blue" aria-hidden="true">
-            <div class="jc-button btn-minus">-</div>
-            <div class="jc-stick stick-left"></div>
-            <div class="jc-dpad">
-              <div class="dpad-btn up">▲</div>
-              <div class="dpad-btn left">◀</div>
-              <div class="dpad-btn right">▶</div>
-              <div class="dpad-btn down">▼</div>
+    <div class="controls-panel" id="widget-grid">
+      <div class="canvas-panel">
+        <div id="screen-stage" class="screen-stage">
+          <div class="switch-device" id="switch-device">
+            <div class="joycon neon-blue" aria-hidden="true">
+              <div class="jc-button btn-minus">-</div>
+              <div class="jc-stick stick-left"></div>
+              <div class="jc-dpad">
+                <div class="dpad-btn up">▲</div>
+                <div class="dpad-btn left">◀</div>
+                <div class="dpad-btn right">▶</div>
+                <div class="dpad-btn down">▼</div>
+              </div>
+              <div class="jc-button btn-capture"></div>
             </div>
-            <div class="jc-button btn-capture"></div>
-          </div>
 
-          <div class="screen-frame">
-            <canvas id="canvas" width="1280" height="720" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+            <div class="screen-frame">
+              <canvas id="canvas" width="1280" height="720" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 
-            <div id="drop-zone" class="drop-zone">
-              <div class="drop-prompt">
-                <div class="upload-art">⚡</div>
-                <h2>Drop Nintendo Switch ROM</h2>
-                <p>Supports decrypted <strong>.nsp</strong>, <strong>.xci</strong>, and homebrew <strong>.nro</strong>, or an archive holding one (<strong>.zip</strong>, <strong>.7z</strong>, <strong>.rar</strong>, <strong>.tar</strong>, …)</p>
-                <button type="button" id="browse-btn" class="btn btn-primary">Select ROM File</button>
+              <div id="drop-zone" class="drop-zone">
+                <div class="drop-prompt">
+                  <div class="upload-art">⚡</div>
+                  <h2>Drop Nintendo Switch ROM</h2>
+                  <p>Supports decrypted <strong>.nsp</strong>, <strong>.xci</strong>, and homebrew <strong>.nro</strong>, or an archive holding one (<strong>.zip</strong>, <strong>.7z</strong>, <strong>.rar</strong>, <strong>.tar</strong>, …)</p>
+                  <button type="button" id="browse-btn" class="btn btn-primary">Select ROM File</button>
+                </div>
+              </div>
+
+              <button type="button" class="stage-fullscreen-btn" id="btn-fullscreen-stage"
+                      title="Fullscreen (Alt+Enter)" aria-label="Fullscreen">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"
+                     stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>
+                </svg>
+              </button>
+              <div id="pause-overlay" class="pause-overlay" style="display: none;">
+                <span class="pause-icon">⏸</span>
+                <span>PAUSED</span>
               </div>
             </div>
 
-            <button type="button" class="stage-fullscreen-btn" id="btn-fullscreen-stage"
-                    title="Fullscreen (Alt+Enter)" aria-label="Fullscreen">
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"
-                   stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/>
-              </svg>
-            </button>
-            <div id="pause-overlay" class="pause-overlay" style="display: none;">
-              <span class="pause-icon">⏸</span>
-              <span>PAUSED</span>
+            <div class="joycon neon-red" aria-hidden="true">
+              <div class="jc-button btn-plus">+</div>
+              <div class="jc-abxy">
+                <div class="abxy-btn btn-x">X</div>
+                <div class="abxy-btn btn-y">Y</div>
+                <div class="abxy-btn btn-a">A</div>
+                <div class="abxy-btn btn-b">B</div>
+              </div>
+              <div class="jc-stick stick-right"></div>
+              <div class="jc-button btn-home">⌂</div>
             </div>
           </div>
 
-          <div class="joycon neon-red" aria-hidden="true">
-            <div class="jc-button btn-plus">+</div>
-            <div class="jc-abxy">
-              <div class="abxy-btn btn-x">X</div>
-              <div class="abxy-btn btn-y">Y</div>
-              <div class="abxy-btn btn-a">A</div>
-              <div class="abxy-btn btn-b">B</div>
+          <div class="fullscreen-overlay" id="fullscreen-overlay">
+            <div class="fullscreen-overlay-buttons">
+              <button type="button" class="btn btn-secondary" id="btn-fullscreen-pause">⏸ Pause</button>
+              <button type="button" class="btn btn-secondary" id="btn-fullscreen-exit">✕ Exit</button>
             </div>
-            <div class="jc-stick stick-right"></div>
-            <div class="jc-button btn-home">⌂</div>
           </div>
         </div>
-
-        <div class="fullscreen-overlay" id="fullscreen-overlay">
-          <div class="fullscreen-overlay-buttons">
-            <button type="button" class="btn btn-secondary" id="btn-fullscreen-pause">⏸ Pause</button>
-            <button type="button" class="btn btn-secondary" id="btn-fullscreen-exit">✕ Exit</button>
-          </div>
-        </div>
+        <p class="canvas-caption">
+          Canvas 1280×720 — Switch handheld resolution
+          <span id="fps"></span>
+        </p>
       </div>
-      <p class="canvas-caption">
-        Canvas 1280×720 — Switch handheld resolution
-        <span id="fps"></span>
-      </p>
-    </div>
 
-    <div class="controls-panel" id="widget-grid">
       <div class="card" data-widget="renderer"
            data-settings="screen scaling (smooth or pixelated), aspect fit, Joy-Con frame">
         <h2>Renderer</h2>

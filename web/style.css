@@ -136,30 +136,18 @@ header p { font-size: 0.85rem; color: #888; }
   justify-content: center;
   align-items: flex-start;
 }
-.canvas-panel {
-  flex: 0 0 900px;
-  min-width: 400px;
-  max-width: 900px;
-  width: 100%;
-  text-align: center;
-  position: relative;
-}
 .canvas-caption { font-size: 0.7rem; color: #555; margin-top: 4px; }
 #fps { margin-left: 12px; color: #aaa; }
-@media (max-width: 940px) {
-  .canvas-panel { flex: 1 1 auto; max-width: 100%; }
-}
-@media (max-width: 460px) {
-  .canvas-panel { min-width: 0; }
-}
 
-/* Widget grid: as many columns of at least --widget-w as fit. Widgets
-   span 1+ columns and keep their own height; layout.js gives each one a
-   row span in 4px units so short widgets pack under each other. */
+/* Widget grid: as many columns of at least --widget-w as fit. The screen
+   is the first item, pinned to the top-left; widgets span 1+ columns and
+   keep their own height, and layout.js gives each one a row span in 4px
+   units so widgets pack beside the screen, underneath it and under each
+   other. */
 .controls-panel {
   --widget-w: 260px;
   --widget-gap: 12px;
-  flex: 1 1 calc(var(--widget-w) * 2 + var(--widget-gap));
+  flex: 1 1 100%;
   min-width: 0;
   width: 100%;
   display: grid;
@@ -171,7 +159,16 @@ header p { font-size: 0.85rem; color: #888; }
   align-items: start;
   align-content: start;
 }
-.main-layout.widgets-below .controls-panel { flex-basis: 100%; }
+.controls-panel > .canvas-panel {
+  grid-column: 1 / -1;
+  grid-row: 1 / span 1;
+  justify-self: center;
+  width: 100%;
+  max-width: 900px;
+  min-width: 0;
+  text-align: center;
+  position: relative;
+}
 
 .card {
   background: #16213e;

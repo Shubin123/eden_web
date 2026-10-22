@@ -55,12 +55,20 @@ try {
     toggle.checked = b;
     toggle.dispatchEvent(new Event('change'));
     const screen = document.querySelector('.canvas-panel').getBoundingClientRect();
-    const grid = document.getElementById('widget-grid').getBoundingClientRect();
-    return { below: grid.top >= screen.bottom, overflow: document.documentElement.scrollWidth > innerWidth };
+    const cards = [...document.querySelectorAll('#widget-grid > .card:not([hidden])')]
+      .map(card => card.getBoundingClientRect());
+    return {
+      beside: cards.filter(r => r.left >= screen.right && r.top < screen.bottom).length,
+      under: cards.filter(r => r.top >= screen.bottom && r.left < screen.right).length,
+      allUnder: cards.every(r => r.top >= screen.bottom),
+      overflow: document.documentElement.scrollWidth > innerWidth,
+    };
   }, beside);
-  check('widgets sit beside the screen when wide', !(await placement(true)).below);
+  const wide = await placement(true);
+  check('widgets fill beside and underneath the screen', wide.beside > 0 && wide.under > 0 && !wide.overflow,
+    JSON.stringify(wide));
   const below = await placement(false);
-  check('widgets can sit underneath the screen', below.below && !below.overflow);
+  check('widgets can all sit underneath the screen', below.allUnder && !below.overflow);
   await placement(true);
   await page.setViewport(viewport);
 

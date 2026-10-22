@@ -11,6 +11,11 @@
  *  - the hamburger menu lists every widget, sets the widget width and
  *    spacing, and resets everything to the default layout.
  *
+ * The Switch screen is the grid's first item, pinned to the top-left. When
+ * widgets go beside it, it spans enough columns for its full width and
+ * widgets fill the columns beside it and the space underneath it;
+ * otherwise it spans the whole row and every widget sits underneath.
+ *
  * The layout is kept in localStorage; the page works without it.
  */
 
@@ -18,8 +23,8 @@
     'use strict';
 
     const grid = document.getElementById('widget-grid');
-    const mainLayout = document.querySelector('.main-layout');
-    if (!grid || !mainLayout) return;
+    const screen = grid?.querySelector(':scope > .canvas-panel');
+    if (!grid || !screen) return;
 
     const STORAGE_KEY = 'eden-layout';
     const MAX_SPAN = 4;
@@ -27,6 +32,7 @@
     const ROW_UNIT = 4;   // matches grid-auto-rows in style.css
     const DEFAULT_WIDGET_WIDTH = 260;
     const DEFAULT_GAP = 12;
+    const SCREEN_WIDTH = 900; // max-width of .canvas-panel in style.css
     const $ = id => document.getElementById(id);
 
     const cards = new Map();
@@ -103,10 +109,21 @@
             const span = Math.min(state.widgets[id].span, cols);
             card.style.gridColumn = span > 1 ? `span ${span}` : '';
         }
+        screen.style.gridColumn = `1 / span ${screenSpan()}`;
+        applyRows(screen);
         for (const card of cards.values()) applyRows(card);
     }
 
-    // Each widget covers enough 4px row units for its height plus the gap.
+    // Columns the screen covers: enough for its full width when at least
+    // one widget column is left beside it, otherwise the whole row.
+    function screenSpan() {
+        const { cols, colWidth } = metrics();
+        const span = Math.ceil((SCREEN_WIDTH + state.gap) / (colWidth + state.gap));
+        return state.beside && span < cols ? span : cols;
+    }
+
+    // Each widget (and the screen) covers enough 4px row units for its
+    // height plus the gap.
     function applyRows(card) {
         if (card.hidden) return;
         const height = card.getBoundingClientRect().height;
@@ -131,7 +148,6 @@
     function apply() {
         grid.style.setProperty('--widget-w', `${state.widgetWidth}px`);
         grid.style.setProperty('--widget-gap', `${state.gap}px`);
-        mainLayout.classList.toggle('widgets-below', !state.beside);
         for (const id of state.order) grid.appendChild(cards.get(id));
         for (const id of cards.keys()) applyCard(id);
         applySpans();
@@ -282,7 +298,7 @@
     const cardObserver = new ResizeObserver(entries => {
         for (const entry of entries) applyRows(entry.target);
     });
-    for (const card of cards.values()) cardObserver.observe(card);
+    for (const card of [screen, ...cards.values()]) cardObserver.observe(card);
 
     // ── Hamburger menu ─────────────────────────────────────────────────
     const menu = $('layout-menu');
