@@ -11,10 +11,12 @@
  *  - the hamburger menu lists every widget, sets the widget width and
  *    spacing, and resets everything to the default layout.
  *
- * The Switch screen is the grid's first item, pinned to the top-left. When
- * widgets go beside it, it spans enough columns for its full width and
- * widgets fill the columns beside it and the space underneath it;
- * otherwise it spans the whole row and every widget sits underneath.
+ * The Switch screen is the grid's first item, pinned to the top-left, and
+ * its width is a percentage of the page. When widgets go beside it, it
+ * spans the columns closest to that width and widgets fill the columns
+ * beside it and the space underneath it; otherwise (or at 100%) it has the
+ * whole row to itself and every widget sits underneath. Widget width is a
+ * percentage of the page too, never narrower than MIN_WIDGET_REM.
  *
  * The layout is kept in localStorage; the page works without it.
  */
@@ -30,9 +32,10 @@
     const MAX_SPAN = 4;
     const MIN_HEIGHT = 80;
     const ROW_UNIT = 4;   // matches grid-auto-rows in style.css
-    const DEFAULT_WIDGET_WIDTH = 260;
+    const DEFAULT_WIDGET_WIDTH = 18;  // % of the page
+    const DEFAULT_SCREEN_WIDTH = 60;  // % of the page
+    const MIN_WIDGET_REM = 14;        // matches the max() in style.css
     const DEFAULT_GAP = 12;
-    const SCREEN_WIDTH = 900; // max-width of .canvas-panel in style.css
     const $ = id => document.getElementById(id);
 
     const cards = new Map();
@@ -52,7 +55,8 @@
             };
         }
         return {
-            widgetWidth: DEFAULT_WIDGET_WIDTH,
+            widgetPercent: DEFAULT_WIDGET_WIDTH,
+            screenPercent: DEFAULT_SCREEN_WIDTH,
             gap: DEFAULT_GAP,
             beside: true,
             order: [...cards.keys()],
@@ -69,7 +73,8 @@
         if (!stored || typeof stored !== 'object') return state;
         const clampNum = (v, lo, hi, fallback) =>
             (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback);
-        state.widgetWidth = clampNum(stored.widgetWidth, 200, 480, state.widgetWidth);
+        state.widgetPercent = clampNum(stored.widgetPercent, 10, 50, state.widgetPercent);
+        state.screenPercent = clampNum(stored.screenPercent, 30, 100, state.screenPercent);
         state.gap = clampNum(stored.gap, 4, 28, state.gap);
         if (typeof stored.beside === 'boolean') state.beside = stored.beside;
         if (Array.isArray(stored.order)) {
@@ -94,32 +99,45 @@
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
     }
 
-    // Column count follows the same rule as the CSS auto-fill track list.
+    // How the grid's columns are laid out. Sharing the top with widgets,
+    // the screen gets `screenCols` columns that add up to exactly its
+    // chosen percentage and widgets get `sideCols` columns in the rest; the
+    // screen's columns carry on underneath it for more widgets. Otherwise
+    // every column is the same width (the CSS auto-fill track list) and the
+    // screen has the top row to itself.
     function metrics() {
         const width = grid.clientWidth;
-        const colMin = Math.min(width, state.widgetWidth);
-        const cols = Math.max(1, Math.floor((width + state.gap) / (colMin + state.gap)));
-        const colWidth = (width - state.gap * (cols - 1)) / cols;
-        return { cols, colWidth };
+        const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const colMin = Math.min(width, Math.max(width * state.widgetPercent / 100, MIN_WIDGET_REM * rem));
+        const fit = w => Math.floor((w + state.gap) / (colMin + state.gap));
+        const screenWidth = width * state.screenPercent / 100;
+        const sideCols = fit(width - screenWidth - state.gap);
+        if (state.beside && sideCols >= 1) {
+            const screenCols = Math.max(1, fit(screenWidth));
+            const cols = screenCols + sideCols;
+            return { cols, colWidth: (width - state.gap * (cols - 1)) / cols, screenCols, sideCols };
+        }
+        const cols = Math.max(1, fit(width));
+        return { cols, colWidth: (width - state.gap * (cols - 1)) / cols, screenCols: cols, sideCols: 0 };
     }
 
     function applySpans() {
-        const { cols } = metrics();
+        const { cols, screenCols, sideCols } = metrics();
+        const gap = `${state.gap}px`;
+        grid.style.gridTemplateColumns = sideCols
+            ? `repeat(${screenCols}, minmax(0, calc((${state.screenPercent}% - ${screenCols - 1} * ${gap}) / ${screenCols})))`
+              + ` repeat(${sideCols}, minmax(0, 1fr))`
+            : '';
         for (const [id, card] of cards) {
             const span = Math.min(state.widgets[id].span, cols);
             card.style.gridColumn = span > 1 ? `span ${span}` : '';
         }
-        screen.style.gridColumn = `1 / span ${screenSpan()}`;
+        screen.style.gridColumn = `1 / span ${screenCols}`;
+        // Alone on the top row the screen keeps its chosen width, centred,
+        // except on a page only one widget wide, where it fills the width.
+        screen.style.width = sideCols || cols === 1 ? '' : `${state.screenPercent}%`;
         applyRows(screen);
         for (const card of cards.values()) applyRows(card);
-    }
-
-    // Columns the screen covers: enough for its full width when at least
-    // one widget column is left beside it, otherwise the whole row.
-    function screenSpan() {
-        const { cols, colWidth } = metrics();
-        const span = Math.ceil((SCREEN_WIDTH + state.gap) / (colWidth + state.gap));
-        return state.beside && span < cols ? span : cols;
     }
 
     // Each widget (and the screen) covers enough 4px row units for its
@@ -146,7 +164,7 @@
     }
 
     function apply() {
-        grid.style.setProperty('--widget-w', `${state.widgetWidth}px`);
+        grid.style.setProperty('--widget-w', `${state.widgetPercent}%`);
         grid.style.setProperty('--widget-gap', `${state.gap}px`);
         for (const id of state.order) grid.appendChild(cards.get(id));
         for (const id of cards.keys()) applyCard(id);
@@ -306,6 +324,7 @@
     const toggle = $('btn-layout-menu');
     const list = $('layout-widget-list');
     const widthInput = $('layout-widget-width');
+    const screenInput = $('layout-screen-width');
     const gapInput = $('layout-gap');
     const besideInput = $('layout-beside-screen');
 
@@ -321,8 +340,12 @@
     function syncMenu() {
         if (!menu) return;
         if (widthInput) {
-            widthInput.value = state.widgetWidth;
-            $('layout-widget-width-value').textContent = `${state.widgetWidth}px`;
+            widthInput.value = state.widgetPercent;
+            $('layout-widget-width-value').textContent = `${state.widgetPercent}%`;
+        }
+        if (screenInput) {
+            screenInput.value = state.screenPercent;
+            $('layout-screen-width-value').textContent = `${state.screenPercent}%`;
         }
         if (gapInput) {
             gapInput.value = state.gap;
@@ -405,7 +428,12 @@
         if (e.key === 'Escape' && menu && !menu.hidden) setMenuOpen(false);
     });
     widthInput?.addEventListener('input', () => {
-        state.widgetWidth = Number(widthInput.value);
+        state.widgetPercent = Number(widthInput.value);
+        save();
+        apply();
+    });
+    screenInput?.addEventListener('input', () => {
+        state.screenPercent = Number(screenInput.value);
         save();
         apply();
     });

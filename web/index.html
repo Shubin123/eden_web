@@ -28,11 +28,18 @@
       <button type="button" class="btn btn-secondary layout-menu-close" id="btn-layout-menu-close" aria-label="Close menu">✕</button>
     </div>
     <div class="speed-control">
-      <label for="layout-widget-width">
-        <span>Widget width</span><output id="layout-widget-width-value">260px</output>
+      <label for="layout-screen-width">
+        <span>Screen width</span><output id="layout-screen-width-value">60%</output>
       </label>
-      <input id="layout-widget-width" type="range" min="200" max="480" step="10" value="260"
-             aria-label="Minimum widget width">
+      <input id="layout-screen-width" type="range" min="30" max="100" step="5" value="60"
+             aria-label="Screen width as a percentage of the page">
+    </div>
+    <div class="speed-control">
+      <label for="layout-widget-width">
+        <span>Widget width</span><output id="layout-widget-width-value">18%</output>
+      </label>
+      <input id="layout-widget-width" type="range" min="10" max="50" step="1" value="18"
+             aria-label="Minimum widget width as a percentage of the page">
     </div>
     <div class="speed-control">
       <label for="layout-gap">

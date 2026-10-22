@@ -145,13 +145,13 @@ header p { font-size: 0.85rem; color: #888; }
    units so widgets pack beside the screen, underneath it and under each
    other. */
 .controls-panel {
-  --widget-w: 260px;
+  --widget-w: 18%;
   --widget-gap: 12px;
   flex: 1 1 100%;
   min-width: 0;
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--widget-w)), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(var(--widget-w), 14rem)), 1fr));
   grid-auto-flow: row dense;
   grid-auto-rows: 4px;
   column-gap: var(--widget-gap);
@@ -164,7 +164,6 @@ header p { font-size: 0.85rem; color: #888; }
   grid-row: 1 / span 1;
   justify-self: center;
   width: 100%;
-  max-width: 900px;
   min-width: 0;
   text-align: center;
   position: relative;

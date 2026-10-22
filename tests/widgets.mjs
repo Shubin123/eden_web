@@ -50,26 +50,35 @@ try {
 
   const viewport = page.viewport();
   await page.setViewport({ width: 1600, height: 900 });
-  const placement = beside => page.evaluate(b => {
+  const placement = (beside, percent) => page.evaluate((b, p) => {
     const toggle = document.getElementById('layout-beside-screen');
     toggle.checked = b;
     toggle.dispatchEvent(new Event('change'));
+    const slider = document.getElementById('layout-screen-width');
+    slider.value = p;
+    slider.dispatchEvent(new Event('input'));
+    const grid = document.getElementById('widget-grid').getBoundingClientRect();
     const screen = document.querySelector('.canvas-panel').getBoundingClientRect();
     const cards = [...document.querySelectorAll('#widget-grid > .card:not([hidden])')]
       .map(card => card.getBoundingClientRect());
     return {
+      percent: Math.round(screen.width / grid.width * 100),
       beside: cards.filter(r => r.left >= screen.right && r.top < screen.bottom).length,
       under: cards.filter(r => r.top >= screen.bottom && r.left < screen.right).length,
       allUnder: cards.every(r => r.top >= screen.bottom),
       overflow: document.documentElement.scrollWidth > innerWidth,
     };
-  }, beside);
-  const wide = await placement(true);
-  check('widgets fill beside and underneath the screen', wide.beside > 0 && wide.under > 0 && !wide.overflow,
-    JSON.stringify(wide));
-  const below = await placement(false);
-  check('widgets can all sit underneath the screen', below.allUnder && !below.overflow);
-  await placement(true);
+  }, beside, percent);
+  for (const percent of [40, 60, 80]) {
+    const shared = await placement(true, percent);
+    check(`${percent}% screen shares the page with widgets beside and underneath`,
+      shared.percent === percent && shared.beside > 0 && shared.under > 0 && !shared.overflow, JSON.stringify(shared));
+  }
+  const full = await placement(true, 100);
+  check('100% screen puts every widget underneath', full.percent === 100 && full.allUnder && !full.overflow);
+  const below = await placement(false, 60);
+  check('widgets can all sit underneath a 60% screen', below.percent === 60 && below.allUnder && !below.overflow);
+  await page.evaluate(() => window.EdenLayout.reset());
   await page.setViewport(viewport);
 
   const fileCheck = await page.evaluate(async () => {
