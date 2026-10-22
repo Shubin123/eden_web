@@ -11,10 +11,14 @@
     "test:widgets": "node tests/widgets.mjs",
     "test:e2e": "node tests/e2e.mjs",
     "test:matrix": "node tests/matrix.mjs",
+    "test:games": "node tests/games.mjs",
+    "test:agent": "node tests/agent.mjs",
+    "compare:games": "node tests/compare-games.mjs",
     "compare": "node scripts/compare-results.mjs",
     "publish-runtime": "node scripts/publish-runtime.mjs"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^1.1.0",
     "puppeteer-core": "^23.11.1"
   }
 }

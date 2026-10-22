@@ -1,0 +1,46 @@
+[
+  {
+    "id": "silksong-opening",
+    "titleId": "010013C00E930000",
+    "goals": [
+      {
+        "goal": "Start a new game from the title screen, in an empty profile slot.",
+        "maxSteps": 15,
+        "expect": "The opening cutscene or a loading screen after choosing an empty profile."
+      },
+      {
+        "goal": "Get through the opening until Hornet is lying in the first room and can be made to stand up, then make her stand up.",
+        "maxSteps": 40,
+        "expect": "Hornet standing in a mossy green cave, with the health and silk meter in the top left."
+      },
+      {
+        "goal": "Walk Hornet to the right and jump at least once.",
+        "maxSteps": 15,
+        "expect": "Hornet further right in the first area."
+      },
+      {
+        "goal": "Open the in-game pause menu, then close it again and return to the game.",
+        "maxSteps": 10,
+        "expect": "Gameplay with no menu open."
+      }
+    ],
+    "createsSave": "silksong-first-room.zip"
+  },
+  {
+    "id": "silksong-continue",
+    "titleId": "010013C00E930000",
+    "save": "silksong-first-room.zip",
+    "goals": [
+      {
+        "goal": "Continue the saved game from the title screen and profile select until Hornet is in the game world.",
+        "maxSteps": 20,
+        "expect": "Hornet in the game world with the health and silk meter visible."
+      },
+      {
+        "goal": "Open the inventory or map screen, look at it, then close it.",
+        "maxSteps": 12,
+        "expect": "Gameplay with no menu open."
+      }
+    ]
+  }
+]

@@ -1,0 +1,181 @@
+[
+  {
+    "id": "silksong-new-game",
+    "titleId": "010013C00E930000",
+    "createsSave": true,
+    "about": "Fresh profile: title and profile menus, the opening, then the first room, walking and the pause menu. Exports the save the other Silksong scenarios start from.",
+    "timeoutS": 1500,
+    "minFps": 12,
+    "steps": [
+      {
+        "frame": 2400,
+        "anchor": "title-menu",
+        "timeoutS": 240
+      },
+      {
+        "frame": 2500,
+        "press": "A"
+      },
+      {
+        "frame": 2600,
+        "anchor": "profile-select",
+        "timeoutS": 60
+      },
+      {
+        "frame": 2650,
+        "press": "A"
+      },
+      {
+        "frame": 8800,
+        "anchor": "first-room",
+        "timeoutS": 600,
+        "minSpread": 20
+      },
+      {
+        "frame": 8900,
+        "press": "A"
+      },
+      {
+        "frame": 9100,
+        "stick": "left",
+        "x": 1,
+        "y": 0,
+        "frames": 200
+      },
+      {
+        "frame": 9350,
+        "checkpoint": "walked-right",
+        "expect": "Hornet standing further right in a mossy green cave."
+      },
+      {
+        "frame": 9400,
+        "press": "A"
+      },
+      {
+        "frame": 9420,
+        "checkpoint": "jump",
+        "expect": "Hornet in the air above the cave floor."
+      },
+      {
+        "frame": 9500,
+        "press": "Plus"
+      },
+      {
+        "frame": 9600,
+        "checkpoint": "pause-menu",
+        "expect": "Silksong's pause menu over the dimmed game.",
+        "minSpread": 1
+      },
+      {
+        "frame": 9650,
+        "press": "B"
+      },
+      {
+        "frame": 9750,
+        "checkpoint": "resumed",
+        "expect": "Gameplay with no menu open."
+      },
+      {
+        "frame": 9800,
+        "exportSave": "silksong-first-room.zip"
+      }
+    ]
+  },
+  {
+    "id": "silksong-continue",
+    "titleId": "010013C00E930000",
+    "save": "silksong-first-room.zip",
+    "about": "From the first-room save: continue from the profile menu (the save replays the opening) into the first room, walk, use the pause menu, then save to slot 1, load it (the page restarts the game from the slot) and get back into the game.",
+    "timeoutS": 2400,
+    "minFps": 12,
+    "steps": [
+      {
+        "frame": 2400,
+        "anchor": "title-menu",
+        "timeoutS": 240
+      },
+      {
+        "frame": 2500,
+        "press": "A"
+      },
+      {
+        "frame": 2600,
+        "anchor": "profile-with-save",
+        "timeoutS": 60
+      },
+      {
+        "frame": 2650,
+        "press": "A"
+      },
+      {
+        "frame": 8800,
+        "anchor": "first-room-from-save",
+        "timeoutS": 600,
+        "minSpread": 20
+      },
+      {
+        "frame": 8900,
+        "press": "A"
+      },
+      {
+        "frame": 9100,
+        "stick": "left",
+        "x": 1,
+        "y": 0,
+        "frames": 200
+      },
+      {
+        "frame": 9350,
+        "checkpoint": "walked-right",
+        "expect": "Hornet standing further right in a mossy green cave."
+      },
+      {
+        "frame": 9400,
+        "press": "Plus"
+      },
+      {
+        "frame": 9500,
+        "checkpoint": "pause-menu",
+        "minSpread": 1,
+        "expect": "Silksong's pause menu over the dimmed game."
+      },
+      {
+        "frame": 9550,
+        "press": "B"
+      },
+      {
+        "frame": 9650,
+        "slotRoundTrip": 1
+      },
+      {
+        "frame": 2400,
+        "anchor": "title-after-slot",
+        "timeoutS": 300
+      },
+      {
+        "frame": 2500,
+        "press": "A"
+      },
+      {
+        "frame": 2600,
+        "anchor": "profile-after-slot",
+        "timeoutS": 60
+      },
+      {
+        "frame": 2650,
+        "press": "A"
+      },
+      {
+        "frame": 8800,
+        "anchor": "first-room-from-slot",
+        "timeoutS": 600,
+        "minSpread": 20
+      },
+      {
+        "frame": 8900,
+        "checkpoint": "in-game-from-slot",
+        "expect": "Hornet in the mossy green first room."
+      }
+    ]
+  }
+]
