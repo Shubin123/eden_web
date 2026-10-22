@@ -48,6 +48,22 @@ try {
   check('performance reads real heap', parseFloat(await page.$eval('#engine-heap', e => e.textContent)) > 0);
   check('controls idle until boot', await page.$eval('#btn-pause', e => e.disabled));
 
+  const viewport = page.viewport();
+  await page.setViewport({ width: 1600, height: 900 });
+  const placement = beside => page.evaluate(b => {
+    const toggle = document.getElementById('layout-beside-screen');
+    toggle.checked = b;
+    toggle.dispatchEvent(new Event('change'));
+    const screen = document.querySelector('.canvas-panel').getBoundingClientRect();
+    const grid = document.getElementById('widget-grid').getBoundingClientRect();
+    return { below: grid.top >= screen.bottom, overflow: document.documentElement.scrollWidth > innerWidth };
+  }, beside);
+  check('widgets sit beside the screen when wide', !(await placement(true)).below);
+  const below = await placement(false);
+  check('widgets can sit underneath the screen', below.below && !below.overflow);
+  await placement(true);
+  await page.setViewport(viewport);
+
   const fileCheck = await page.evaluate(async () => {
     const { mountRom } = await import('./rom-file.js');
     const FS = window.__edenLab.module.FS;
