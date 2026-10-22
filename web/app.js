@@ -517,6 +517,7 @@ function pollStatus() {
   btnPause.disabled = !isRunning;
   btnReset.disabled = !(isRunning || isPaused);
   btnStep.disabled = true;
+  if (isRunning) attachPipStream();
   if (state !== lastState) {
     lastState = state;
     log(`Emulation state: ${name}`, state === 4 ? 'err' : 'ui');
@@ -803,6 +804,75 @@ window.addEventListener('keydown', (e) => {
     toggleFullscreen();
   } else if (e.key === 'Escape' && fullscreenElement() === screenStage) {
     toggleFullscreen();
+  }
+});
+
+// Picture-in-picture: a video fed by the canvas stream floats above other windows.
+// Keyboard and gamepad input still reach this tab, which keeps rendering while hidden.
+const pipVideo = document.getElementById('pip-video');
+const btnPip = document.getElementById('btn-pip');
+const btnPipStage = document.getElementById('btn-pip-stage');
+const pipOverlay = document.getElementById('pip-overlay');
+const pipHelp = document.getElementById('pip-help');
+const canPip = !!(document.pictureInPictureEnabled && canvas.captureStream && pipVideo.requestPictureInPicture);
+
+// The canvas stream only has frames once a game draws, so it is attached at boot
+// and PiP stays unavailable until the video has its first frame.
+function attachPipStream() {
+  if (!canPip || pipVideo.srcObject) return;
+  pipVideo.srcObject = canvas.captureStream(60);
+  pipVideo.play().catch(() => {});
+}
+pipVideo.addEventListener('loadedmetadata', () => {
+  btnPip.disabled = false;
+  btnPipStage.disabled = false;
+});
+
+async function togglePictureInPicture() {
+  if (!canPip) return;
+  try {
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture();
+      return;
+    }
+    if (pipVideo.readyState < 1) return;
+    if (fullscreenElement()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    await pipVideo.requestPictureInPicture();
+  } catch (err) {
+    log(`Picture-in-picture failed: ${err.message}`, 'err');
+  }
+}
+
+function onPipChange(active) {
+  pipOverlay.hidden = !active;
+  btnPip.textContent = active ? '✕ Exit picture-in-picture' : '⧉ Picture-in-picture';
+  if (!active) pipVideo.play().catch(() => {});
+}
+pipVideo.addEventListener('enterpictureinpicture', () => onPipChange(true));
+pipVideo.addEventListener('leavepictureinpicture', () => onPipChange(false));
+// The PiP window's play/pause buttons drive the emulator rather than the stream.
+pipVideo.addEventListener('pause', () => {
+  if (document.pictureInPictureElement === pipVideo && isRunning) pauseLoop();
+});
+pipVideo.addEventListener('play', () => {
+  if (document.pictureInPictureElement === pipVideo && isPaused) startLoop();
+});
+
+if (canPip) {
+  btnPip.disabled = true;
+  btnPipStage.disabled = true;
+  btnPip.addEventListener('click', togglePictureInPicture);
+  btnPipStage.addEventListener('click', togglePictureInPicture);
+  document.getElementById('btn-pip-return').addEventListener('click', togglePictureInPicture);
+} else {
+  btnPip.disabled = true;
+  btnPipStage.hidden = true;
+  pipHelp.textContent = 'This browser does not support picture-in-picture for the game screen.';
+}
+window.addEventListener('keydown', (e) => {
+  if (e.altKey && e.code === 'KeyP') {
+    e.preventDefault();
+    togglePictureInPicture();
   }
 });
 

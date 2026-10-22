@@ -546,6 +546,32 @@ kbd {
 .screen-stage.is-fullscreen .switch-device.no-joycons { height: 100%; }
 .screen-stage.is-fullscreen .switch-device.no-joycons .screen-frame { aspect-ratio: auto; height: 100%; }
 .screen-stage.is-fullscreen .stage-fullscreen-btn { display: none; }
+.stage-pip-btn { right: 50px; }
+.stage-pip-btn[hidden] { display: none; }
+.stage-pip-btn:disabled { display: none; }
+
+/* Picture-in-picture plays a stream of the canvas; the video itself stays out of sight. */
+.pip-video {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.pip-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 13;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #000;
+  color: #e0e0e0;
+}
+.pip-overlay[hidden] { display: none; }
+.pip-overlay .btn { width: auto; margin: 0; padding: 6px 12px; }
 .fullscreen-overlay {
   display: none;
   position: absolute;

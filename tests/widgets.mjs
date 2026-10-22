@@ -276,6 +276,67 @@ try {
   await page.click('#btn-fullscreen-exit');
   await page.waitForFunction(() => !document.fullscreenElement);
   check('exit button leaves fullscreen', true);
+  check('picture-in-picture waits for a running game', await page.$eval('#btn-pip', e => e.disabled) &&
+    await page.$eval('#btn-pip-stage', e => getComputedStyle(e).display === 'none'));
+  // Stand-in for a game: a canvas that draws every frame feeds the PiP video.
+  await page.evaluate(() => new Promise(resolve => {
+    const source = document.createElement('canvas');
+    source.width = 320; source.height = 180;
+    const g = source.getContext('2d');
+    let n = 0;
+    (function draw() {
+      g.fillStyle = `hsl(${n++ % 360} 80% 50%)`; g.fillRect(0, 0, 320, 180);
+      if (!window.stopPipFixture) requestAnimationFrame(draw);
+    })();
+    const video = document.querySelector('#pip-video');
+    video.addEventListener('loadedmetadata', resolve, { once: true });
+    video.srcObject = source.captureStream(60);
+    video.play();
+  }));
+  check('picture-in-picture is offered once frames arrive', !(await page.$eval('#btn-pip', e => e.disabled)) &&
+    await page.$eval('#btn-pip-stage', e => getComputedStyle(e).display !== 'none'));
+  const pipState = () => page.evaluate(() => ({
+    active: document.pictureInPictureElement?.id === 'pip-video',
+    overlay: !document.querySelector('#pip-overlay').hidden,
+    label: document.querySelector('#btn-pip').textContent,
+  }));
+  await page.click('#btn-pip');
+  await page.waitForFunction(() => document.pictureInPictureElement?.id === 'pip-video');
+  let pip = await pipState();
+  check('picture-in-picture button floats the screen', pip.active && pip.overlay && pip.label.includes('Exit'));
+  await page.click('#btn-pip-return');
+  await page.waitForFunction(() => !document.pictureInPictureElement);
+  pip = await pipState();
+  check('return button leaves picture-in-picture', !pip.active && !pip.overlay && !pip.label.includes('Exit') &&
+    !(await page.$eval('#pip-video', v => v.paused)));
+  await page.click('#btn-pip-stage');
+  await page.waitForFunction(() => document.pictureInPictureElement?.id === 'pip-video');
+  check('screen button floats the screen', true);
+  await page.click('#btn-pip');
+  await page.waitForFunction(() => !document.pictureInPictureElement);
+  check('picture-in-picture button leaves picture-in-picture', true);
+  await page.click('#btn-fullscreen-stage');
+  await page.waitForFunction(() => document.fullscreenElement?.id === 'screen-stage');
+  await page.keyboard.down('Alt');
+  await page.keyboard.press('KeyP');
+  await page.keyboard.up('Alt');
+  await page.waitForFunction(() => document.pictureInPictureElement?.id === 'pip-video');
+  check('Alt+P leaves fullscreen for picture-in-picture', !(await page.evaluate(() => document.fullscreenElement)));
+  await page.keyboard.down('Alt');
+  await page.keyboard.press('KeyP');
+  await page.keyboard.up('Alt');
+  await page.waitForFunction(() => !document.pictureInPictureElement);
+  check('Alt+P leaves picture-in-picture', true);
+  // Hand the video back to the app so a supplied game attaches its own stream.
+  await page.evaluate(() => {
+    window.stopPipFixture = true;
+    const video = document.querySelector('#pip-video');
+    video.pause();
+    video.srcObject.getTracks().forEach(track => track.stop());
+    video.srcObject = null;
+    document.querySelector('#btn-pip').disabled = true;
+    document.querySelector('#btn-pip-stage').disabled = true;
+  });
   const game = process.env.EDEN_ROM;
   if (game) {
     for (const [selector, file] of [['#keys-input', process.env.EDEN_KEYS], ['#firmware-input', process.env.EDEN_FIRMWARE]]) {
@@ -295,6 +356,19 @@ try {
     await page.$eval('#btn-play', e => e.click());
     await page.waitForFunction(() => window.__edenLab.module._eden_get_state() === 2, { timeout: 15_000 });
     check('resume reaches core', true);
+    await page.waitForFunction(() => document.querySelector('#pip-video').readyState >= 1 &&
+      !document.querySelector('#btn-pip').disabled, { timeout: 15_000 });
+    await page.click('#btn-pip');
+    await page.waitForFunction(() => document.pictureInPictureElement?.id === 'pip-video');
+    check('picture-in-picture streams the running game', await page.$eval('#pip-video', v => v.videoWidth) > 0);
+    await page.$eval('#pip-video', v => v.pause());
+    await page.waitForFunction(() => window.__edenLab.module._eden_get_state() === 3, { timeout: 15_000 });
+    check('picture-in-picture pause reaches core', true);
+    await page.$eval('#pip-video', v => v.play());
+    await page.waitForFunction(() => window.__edenLab.module._eden_get_state() === 2, { timeout: 15_000 });
+    check('picture-in-picture play reaches core', true);
+    await page.click('#btn-pip-return');
+    await page.waitForFunction(() => !document.pictureInPictureElement);
     await page.waitForFunction(() => window.__edenLab.module._eden_get_audio_state() > 0, { timeout: 30_000 });
     await page.click('#btn-sound');
     await page.waitForFunction(() => window.__edenLab.module._eden_get_audio_state() === 2, { timeout: 10_000 });
