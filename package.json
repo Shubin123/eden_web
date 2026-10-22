@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node scripts/server.mjs",
     "sync": "node scripts/sync-runtime.mjs",
-    "test": "node tests/web_artifact_smoke.cjs && node tests/zip_reader.mjs && node tests/saves.mjs && node tests/archive_reader.mjs && node tests/rom_file.mjs && node tests/frame_watchdog.mjs && node tests/results.mjs && node tests/compat.mjs && node tests/compare_results.mjs && node tests/diagnostics.mjs",
+    "test": "node tests/web_artifact_smoke.cjs && node tests/zip_reader.mjs && node tests/saves.mjs && node tests/archive_reader.mjs && node tests/rom_file.mjs && node tests/frame_watchdog.mjs && node tests/results.mjs && node tests/compat.mjs && node tests/compare_results.mjs && node tests/diagnostics.mjs && node tests/agent_protocol.mjs",
     "test:widgets": "node tests/widgets.mjs",
     "test:e2e": "node tests/e2e.mjs",
     "test:matrix": "node tests/matrix.mjs",
@@ -18,7 +18,6 @@
     "publish-runtime": "node scripts/publish-runtime.mjs"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^1.1.0",
     "puppeteer-core": "^23.11.1"
   }
 }

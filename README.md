@@ -54,6 +54,33 @@ ROM filesystem reads, first-save persistence/restoration and screen scaling. Wit
 keyboard forwarding. Use `CHROME_PATH` to select Chrome. See
 [the integration work log](docs/widget-core-integration.md) for results and outstanding work.
 
+### Game suites
+
+`npm run test:games` replays the frame-timed scenarios in `tests/games/*.json` from save files,
+compares checkpoint captures, frame rates and guest CPU work with baselines recorded by `--record`
+in `$EDEN_SUITE_DIR` (saves and baselines are user data and stay outside the repo), and
+`npm run compare:games` compares two reports.
+
+`npm run test:agent` is the agentic suite: a model plays toward the plain-language goals in
+`tests/agent/*.json`, one controller action per turn while the game is paused, and reports crashes,
+hangs, blank screens and visual faults. A "done" or a fault counts only after a second yes/no look
+at the screen confirms it. `--emit-scenarios` writes reached goals as scenarios that `test:games`
+replays without a model, and `--judge <games.json>` asks the model whether scripted checkpoints
+show what their `expect` text says. It uses no vendor SDK: any model behind an OpenAI-compatible
+endpoint (Ollama, llama.cpp, vLLM, LM Studio, OpenRouter, OpenAI) or the Anthropic Messages API can
+play, down to small local Qwen models. Text-only models get a brightness map of the screen; pair
+them with a vision model in `EDEN_AGENT_CHECK_MODEL`, or their goals are not counted as reached.
+```bash
+ollama pull qwen2.5vl:3b && npm run test:agent -- --check-model            # default: local Ollama
+EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip npm run test:agent -- --only silksong-opening
+EDEN_AGENT_MODEL=qwen2.5:0.5b EDEN_AGENT_VISION=0 EDEN_AGENT_CHECK_MODEL=qwen2.5vl:3b npm run test:agent
+EDEN_AGENT_BASE_URL=http://127.0.0.1:8080/v1 EDEN_AGENT_MODEL=<model> npm run test:agent  # llama.cpp, vLLM, LM Studio
+EDEN_AGENT_PROVIDER=anthropic EDEN_AGENT_MODEL=<model> ANTHROPIC_API_KEY=... EDEN_AGENT_PRICE=4,20 npm run test:agent
+```
+`artifacts/agent-<time>/agent.json` holds every turn (screen, reply, action, confirmation), the
+issues found, token use and model latency p50/p95. `--max-cost` stops a run once the spend priced by
+`EDEN_AGENT_PRICE` (USD per million input and output tokens) passes the limit.
+
 ## Audio and live engine widgets
 
 The Audio widget requires core API 3. The browser build sends game audio through SDL Web Audio;

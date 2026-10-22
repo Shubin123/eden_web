@@ -10,3 +10,8 @@ AI trailers, or Co-authored-by tags in commits or PRs.
 
 Keep commercial ROMs (NSP, XCI), cryptographic keys (`prod.keys`, `title.keys`), save data,
 and telemetry caches local and ignored.
+
+Any coding agent can run the test suites; none of them needs a particular vendor. `npm test`
+runs without a browser or model. `npm run test:agent` drives games with any model behind an
+OpenAI-compatible or Anthropic endpoint (default: a local Ollama `qwen2.5vl:3b`); see the
+README's Game suites section for the `EDEN_AGENT_*` settings.

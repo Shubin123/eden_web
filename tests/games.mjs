@@ -38,7 +38,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { frameTimeStats } from '../web/results.js';
-import { DEFAULT_GAME_DIRS, DEFAULT_SUITE_DIR, checkSaveRule, findRoms, launchLab, openGame, saveEntries } from './lib/game-session.mjs';
+import { DEFAULT_GAME_DIRS, DEFAULT_SUITE_DIR, checkSaveRule, difference, findRoms, launchLab, openGame, saveEntries, spread, thumbnail } from './lib/game-session.mjs';
 import { createProgress } from './lib/progress.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -95,25 +95,6 @@ async function loadScenarios() {
   return selected.sort((a, b) => Number(Boolean(b.createsSave)) - Number(Boolean(a.createsSave)));
 }
 
-/// 64x36 grey thumbnail of a PNG, computed in the page (Node has no PNG decoder here).
-async function thumbnail(page, png) {
-  return page.evaluate(async base64 => {
-    const bitmap = await createImageBitmap(new Blob([Uint8Array.from(atob(base64), c => c.charCodeAt(0))], { type: 'image/png' }));
-    const canvas = new OffscreenCanvas(64, 36);
-    const context = canvas.getContext('2d');
-    context.drawImage(bitmap, 0, 0, 64, 36);
-    const { data } = context.getImageData(0, 0, 64, 36);
-    const grey = [];
-    for (let i = 0; i < data.length; i += 4) grey.push(Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]));
-    return grey;
-  }, png.toString('base64'));
-}
-
-const difference = (a, b) => a.reduce((sum, v, i) => sum + Math.abs(v - b[i]), 0) / a.length;
-const spread = grey => {
-  const mean = grey.reduce((a, b) => a + b, 0) / grey.length;
-  return Math.sqrt(grey.reduce((sum, v) => sum + (v - mean) ** 2, 0) / grey.length);
-};
 const round = v => Math.round(v * 10) / 10;
 
 async function runScenario(lab, scenario, rom, runDir, baseline, progress) {

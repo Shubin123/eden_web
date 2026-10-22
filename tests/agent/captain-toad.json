@@ -1,0 +1,16 @@
+[
+  {
+    "id": "captain-toad-first-course",
+    "titleId": "01009BF0072D4000",
+    "startFrame": 1200,
+    "goals": [
+      {
+        "goal": "Captain Toad (white and red, with a headlamp) is in the first course. Walk him with the left stick to Toadette (pink) on the right side of the ruins.",
+        "maxSteps": 20,
+        "expect": "Captain Toad and Toadette standing next to each other.",
+        "check": "Are two Toad characters standing right next to each other?"
+      }
+    ],
+    "createsSave": "captain-toad-first-course.zip"
+  }
+]
