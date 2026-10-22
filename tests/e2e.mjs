@@ -15,6 +15,7 @@
 // --no-screenshots diagnoses screenshot stalls; visible-frame validation still fails without captures.
 // --no-present skips the canvas capture sampler (it copies every frame, which costs a little).
 // --scenario <name> names the scenario in results; --artifacts <dir> writes there instead.
+// --tap-a <s> taps the A button every sample from <s> seconds after boot, to get past menus.
 //   EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip EDEN_ROM=game.nsp node tests/e2e.mjs
 //
 // Each run writes, next to its report and screenshots, a result in the shared format of
@@ -54,6 +55,7 @@ const { values: args } = parseArgs({
     screenshots: { type: 'boolean', default: true },
     scenario: { type: 'string' },
     artifacts: { type: 'string' },
+    'tap-a': { type: 'string' },
   },
 });
 
@@ -410,6 +412,11 @@ async function runOnce(index) {
           }
         }
         if (sample.state === 'Failed' || /ROM Load Failed|Cannot boot|Cannot open/.test(sample.status + sample.romStatus)) break;
+        if (args['tap-a'] && sample.state === 'Running' && sample.t >= Number(args['tap-a'])) {
+          await sampleClient.send('Runtime.evaluate', {
+            expression: `(m => { m?._eden_set_button(0, 0, 1); setTimeout(() => m?._eden_set_button(0, 0, 0), 150); })(window.__edenLab?.module)`,
+          }, { timeout: 10_000 }).catch(() => {});
+        }
         if (args['crash-at'] && !report.crashInjectedAt) {
           const firstDrawn = report.timeline.find(entry => entry.fps > 0);
           if (firstDrawn && sample.t >= firstDrawn.t + Number(args['crash-at'])) {

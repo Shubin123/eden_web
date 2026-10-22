@@ -13,7 +13,7 @@ import { mountBrowserRom } from './browser-rom.js';
 import { setupAudio } from './audio.js';
 import { setupCamera } from './camera.js';
 import { createFrameWatchdog } from './frame-watchdog.js';
-import { isArchive, openArchive } from './archive.js';
+import { isArchive, openArchive, storedRomSlice } from './archive.js';
 import { CPU_CORES, activeCore, coreEnvironment, findCore, storeCore } from './cores.js';
 import {
   restoreSaves,
@@ -567,7 +567,16 @@ async function findRomInArchive(file) {
     }
   }
   const { rom } = await openArchive(file, { romExtensions: ARCHIVED_ROM_EXTENSIONS, systemExtensions: [] });
-  return rom ? { ...rom, name: baseName(rom.name) } : null;
+  if (!rom) return null;
+  const stored = await storedRomSlice(file, rom).catch(() => null);
+  if (stored) {
+    log(`${file.name}: ${baseName(rom.name)} is stored uncompressed; reading it in place.`, 'ui');
+    return { name: baseName(rom.name), size: rom.size, file: stored, stream: async () => stored.stream() };
+  }
+  // The check may have read from the decoder, so start it again.
+  rom.cancel?.();
+  const { rom: decoded } = await openArchive(file, { romExtensions: ARCHIVED_ROM_EXTENSIONS, systemExtensions: [] });
+  return decoded ? { ...decoded, name: baseName(decoded.name) } : null;
 }
 
 // Handle dropped or selected ROM file, or an archive holding one
