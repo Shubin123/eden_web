@@ -348,7 +348,7 @@ kbd {
   color: #fff;
 }
 
-.save-toolbar { display: grid; grid-template-columns: 82px 1fr; gap: 6px; align-items: start; }
+.save-toolbar { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: start; }
 .save-toolbar .renderer-select { margin-bottom: 0; }
 .save-empty { color: #777; font-size: 0.75rem; padding: 6px 0; }
 

@@ -22,6 +22,11 @@ import {
   clearSaves,
   exportSaves,
   importSaves,
+  SLOT_COUNT,
+  saveSlot,
+  listSlots,
+  loadSlot,
+  clearSlot,
   recordCrash,
   listCrashes,
   clearCrashes,
@@ -474,10 +479,15 @@ function showCoreInfo() {
 }
 
 let titleInfoRead = false;
+let runningGame = null;
 function showRuntimeInfo(state) {
   if (state === 2 && !titleInfoRead) {
     const info = readCoreJson('eden_get_game_info');
     if (info?.name) {
+      const titleId = /^[0-9A-F]{16}$/i.test(info.titleId ?? '') ? info.titleId
+        : currentRomName.match(/\[([0-9A-F]{16})\]/i)?.[1];
+      runningGame = titleId ? { titleId: titleId.toUpperCase(), name: info.name } : null;
+      refreshSlots();
       titleName.textContent = info.name;
       titleName.title = [info.titleId, info.displayVersion].filter(Boolean).join(' · ');
       log(`Game: ${info.name}, title ${info.titleId}${info.displayVersion ? `, version ${info.displayVersion}` : ''}.`, 'ui');
@@ -1043,11 +1053,16 @@ async function resumeAfterCrash() {
   }
   try {
     const file = await (await (await resumeDir()).getFileHandle(resume.name)).getFile();
-    recoveryStatus.textContent = `Restarted after a crash (${resume.reason}).`;
-    log(`Restarting ${resume.name} after a crash (${resume.reason}).`, 'ui');
+    if (resume.slot) {
+      savesStatus.textContent = `Restarted from slot ${resume.slot}.`;
+      log(`Restarting ${resume.name} from save slot ${resume.slot}.`, 'ui');
+    } else {
+      recoveryStatus.textContent = `Restarted after a crash (${resume.reason}).`;
+      log(`Restarting ${resume.name} after a crash (${resume.reason}).`, 'ui');
+    }
     await handleFile(file);
   } catch (err) {
-    setRomStatus(`Could not restart after the crash (${err.message}). Pick the game again.`);
+    setRomStatus(`Could not restart ${resume.slot ? 'from the slot' : 'after the crash'} (${err.message}). Pick the game again.`);
   }
 }
 
@@ -1105,6 +1120,82 @@ document.getElementById('btn-saves-export').addEventListener('click', async () =
   }
 });
 document.getElementById('btn-saves-import').addEventListener('click', () => savesImportInput.click());
+
+const slotSelect = document.getElementById('save-state-slot');
+const slotInfo = document.getElementById('save-slot-info');
+const btnSaveSlot = document.getElementById('btn-save-state');
+const btnLoadSlot = document.getElementById('btn-load-slot');
+const btnClearSlot = document.getElementById('btn-clear-slot');
+let slots = [];
+for (let n = 1; n <= SLOT_COUNT; n++) slotSelect.add(new Option(`Slot ${n}`, String(n)));
+
+function showSlot() {
+  const record = slots[Number(slotSelect.value) - 1];
+  slotInfo.textContent = record
+    ? `${record.name}, ${record.files} files, ${(record.bytes / 1024).toFixed(0)} KB, saved ${new Date(record.time).toLocaleString()}`
+    : 'Empty slot.';
+  btnSaveSlot.disabled = !(isRomLoaded && runningGame);
+  btnSaveSlot.title = btnSaveSlot.disabled ? 'Start a game to save its saves to a slot' : '';
+  btnLoadSlot.disabled = !record;
+  btnClearSlot.disabled = !record;
+}
+
+async function refreshSlots() {
+  slots = await listSlots().catch(() => []);
+  slots.forEach((record, i) => { slotSelect.options[i].text = `Slot ${i + 1}${record ? ' ●' : ''}`; });
+  showSlot();
+}
+
+slotSelect.addEventListener('change', showSlot);
+btnSaveSlot.addEventListener('click', async () => {
+  const slot = Number(slotSelect.value);
+  const record = slots[slot - 1];
+  if (record && !confirm(`Replace slot ${slot} (${record.name})?`)) return;
+  try {
+    const saved = await saveSlot(slot, runningGame.titleId, runningGame.name, edenModule.FS);
+    savesStatus.textContent = `Saved ${saved.name} to slot ${slot}.`;
+  } catch (err) {
+    savesStatus.textContent = `Could not save to slot ${slot}: ${err.message}`;
+  }
+  refreshSlots();
+});
+btnLoadSlot.addEventListener('click', async () => {
+  const slot = Number(slotSelect.value);
+  const record = slots[slot - 1];
+  if (!record) return;
+  const restart = isRomLoaded && lastGameFile;
+  if (isRomLoaded && !confirm(`Restart the game from slot ${slot} (${record.name})? Progress since it was saved is lost.`)) return;
+  // A running game would overwrite the loaded slot with its own saves at the next save point.
+  stopSaveWatch?.();
+  stopSaveWatch = null;
+  try {
+    const { meta } = await loadSlot(slot);
+    showSavePoint(meta);
+  } catch (err) {
+    savesStatus.textContent = `Could not load slot ${slot}: ${err.message}`;
+    if (isRomLoaded) stopSaveWatch = watchSaves(() => edenModule?.FS, () => isRunning && !crashed, showSavePoint);
+    return;
+  }
+  if (!restart) {
+    savesStatus.textContent = `Loaded slot ${slot} (${record.name}). It is used the next time the game boots.`;
+    return;
+  }
+  savesStatus.textContent = `Loaded slot ${slot}; restarting ${record.name}...`;
+  try {
+    await stashGameFile(lastGameFile);
+    sessionStorage.setItem(RESUME_KEY, JSON.stringify({ name: lastGameFile.name, slot }));
+    location.reload();
+  } catch (err) {
+    savesStatus.textContent = `Loaded slot ${slot}. Reload the page and start the game to use it (${err.message}).`;
+  }
+});
+btnClearSlot.addEventListener('click', async () => {
+  const slot = Number(slotSelect.value);
+  if (!confirm(`Delete slot ${slot}? This cannot be undone.`)) return;
+  await clearSlot(slot).catch(() => {});
+  refreshSlots();
+});
+refreshSlots();
 savesImportInput.addEventListener('change', async () => {
   const files = [...savesImportInput.files];
   savesImportInput.value = '';

@@ -184,6 +184,45 @@ try {
       return { files: imported.files, titles: imported.titles, exported: exported.map(e => e.name), bytes };
     } finally { await clearSaves(); }
   });
+  const slotTrip = await page.evaluate(async () => {
+    const { saveSlot, loadSlot, listSlots, clearSlot, restoreSaves, clearSaves, importSaves } = await import('./recovery.js');
+    const { EDEN_DATA_ROOT, writeZip } = await import('./system-files.js');
+    const FS = window.__edenLab.module.FS;
+    const dir = 'nand/user/save/0000000000000000/0123456789ABCDEF0123456789ABCDEF';
+    const own = `${dir}/0100000000020000/progress.sav`;
+    const other = `${dir}/0100000000030000/other.sav`;
+    const write = (path, bytes) => {
+      FS.mkdirTree(`${EDEN_DATA_ROOT}/${path}`.slice(0, `${EDEN_DATA_ROOT}/${path}`.lastIndexOf('/')));
+      FS.writeFile(`${EDEN_DATA_ROOT}/${path}`, new Uint8Array(bytes));
+    };
+    try {
+      write(own, [1]);
+      write(other, [7]);
+      const saved = await saveSlot(3, '0100000000020000', 'Fixture', FS);
+      write(own, [2]);
+      // The stored save point holds newer progress for this game and another game's save.
+      await importSaves(new File([writeZip([{ name: own, data: new Uint8Array([2]) }, { name: other, data: new Uint8Array([8]) }])], 'x.zip'));
+      await loadSlot(3);
+      FS.unlink(`${EDEN_DATA_ROOT}/${own}`);
+      FS.unlink(`${EDEN_DATA_ROOT}/${other}`);
+      await restoreSaves(FS);
+      const result = {
+        files: saved.files,
+        listed: (await listSlots())[2]?.name,
+        own: Array.from(FS.readFile(`${EDEN_DATA_ROOT}/${own}`)),
+        other: Array.from(FS.readFile(`${EDEN_DATA_ROOT}/${other}`)),
+      };
+      await clearSlot(3);
+      result.cleared = (await listSlots())[2] === null;
+      FS.unlink(`${EDEN_DATA_ROOT}/${own}`);
+      FS.unlink(`${EDEN_DATA_ROOT}/${other}`);
+      return result;
+    } finally { await clearSaves(); }
+  });
+  check('save slot restores one game and keeps the others', slotTrip.files === 1 && slotTrip.listed === 'Fixture' &&
+    slotTrip.own.join() === '1' && slotTrip.other.join() === '8' && slotTrip.cleared);
+  check('slot controls show the slots', await page.$$eval('#save-state-slot option', o => o.length) === 8 &&
+    await page.$eval('#btn-save-state', b => b.disabled));
   check('saves import from and export to ZIP', roundTrip.files === 1 && roundTrip.titles[0] === '0100000000010000' &&
     roundTrip.exported.includes('nand/user/save/0000000000000000/0123456789ABCDEF0123456789ABCDEF/0100000000010000/slot.sav') &&
     roundTrip.bytes.join(',') === '4,5,6');

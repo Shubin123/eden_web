@@ -5,6 +5,9 @@
 // whenever they change and then stay unchanged for a poll interval, so a snapshot is never taken
 // halfway through the game writing a save. Every boot restores the latest snapshot. Save points
 // can be exported to and imported from ZIP archives.
+//
+// Save slots keep a copy of one game's save folder. Loading a slot puts it back into the save
+// point, which the game reads at its next boot.
 
 import { EDEN_DATA_ROOT, readZipEntries, writeZip } from './system-files.js';
 
@@ -13,14 +16,18 @@ const SAVE_DIRS = ['nand/user/save', 'nand/system/save'];
 const DB_NAME = 'eden-recovery';
 const SAVES = 'saves';
 const CRASHES = 'crashes';
+const SLOTS = 'slots';
 const META_KEY = '__meta';
+export const SLOT_COUNT = 8;
 
 function openDb() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
+    const request = indexedDB.open(DB_NAME, 2);
     request.onupgradeneeded = () => {
-      request.result.createObjectStore(SAVES);
-      request.result.createObjectStore(CRASHES, { autoIncrement: true });
+      const db = request.result;
+      if (!db.objectStoreNames.contains(SAVES)) db.createObjectStore(SAVES);
+      if (!db.objectStoreNames.contains(CRASHES)) db.createObjectStore(CRASHES, { autoIncrement: true });
+      if (!db.objectStoreNames.contains(SLOTS)) db.createObjectStore(SLOTS);
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -177,6 +184,66 @@ export async function importSaves(file) {
     store.put(meta, META_KEY);
   });
   return { files: imported.length, bytes: imported.reduce((sum, [, blob]) => sum + blob.size, 0), titles: [...titles], meta };
+}
+
+async function writeSavePoint(entries) {
+  const meta = { time: Date.now(), files: entries.length, bytes: 0 };
+  for (const [, blob] of entries) meta.bytes += blob.size;
+  await withStore(SAVES, 'readwrite', store => {
+    store.clear();
+    for (const [path, blob] of entries) store.put(blob, path);
+    store.put(meta, META_KEY);
+  });
+  return meta;
+}
+
+/// Whether `path` lies in the user save folder of `titleId`.
+function inTitleSave(path, titleId) {
+  const parts = path.split('/');
+  return path.startsWith('nand/user/save/') && parts.length > 6 && parts[5].toUpperCase() === titleId;
+}
+
+/// Copies the saves of `titleId` into `slot`, from the running engine's filesystem when `FS` is
+/// given, otherwise from the stored save point. Returns the slot record without its files.
+export async function saveSlot(slot, titleId, name, FS) {
+  titleId = titleId.toUpperCase();
+  const source = FS
+    ? listSaveFiles(FS).map(([path]) => [path, new Blob([FS.readFile(`${EDEN_DATA_ROOT}/${path}`)])])
+    : await storedSaves();
+  const files = source.filter(([path]) => inTitleSave(path, titleId));
+  if (!files.length) throw new Error(`${name || titleId} has not written a save yet`);
+  const record = { slot, titleId, name: name || titleId, time: Date.now(), bytes: 0, files };
+  for (const [, blob] of files) record.bytes += blob.size;
+  await withStore(SLOTS, 'readwrite', store => store.put(record, slot));
+  return { ...record, files: files.length };
+}
+
+/// Lists the slots as an array of SLOT_COUNT records (null for empty slots), without their files.
+export async function listSlots() {
+  const records = await withStore(SLOTS, 'readonly', store => requestResult(store.getAll()));
+  const slots = Array(SLOT_COUNT).fill(null);
+  for (const record of records) {
+    if (record.slot >= 1 && record.slot <= SLOT_COUNT) slots[record.slot - 1] = { ...record, files: record.files.length };
+  }
+  return slots;
+}
+
+/// Replaces the game's saves in the stored save point with `slot`. Returns the slot record and
+/// the new save point metadata.
+export async function loadSlot(slot) {
+  const record = await withStore(SLOTS, 'readonly', store => requestResult(store.get(slot)));
+  if (!record) throw new Error(`Slot ${slot} is empty`);
+  const kept = (await storedSaves()).filter(([path]) => !inTitleSave(path, record.titleId));
+  // A profile created after the slot was saved has a new id; file the slot under it.
+  const profile = kept.map(([key]) => PROFILE_SAVE.exec(key)?.[1]).find(Boolean);
+  const files = record.files.map(([path, blob]) =>
+    [profile ? path.replace(PROFILE_SAVE, `nand/user/save/0000000000000000/${profile}/`) : path, blob]);
+  const meta = await writeSavePoint([...kept, ...files]);
+  return { record: { ...record, files: record.files.length }, meta };
+}
+
+export async function clearSlot(slot) {
+  await withStore(SLOTS, 'readwrite', store => store.delete(slot));
 }
 
 /// Polls the save folders while `healthy()` holds and stores a save point once a change has
