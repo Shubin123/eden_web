@@ -40,6 +40,7 @@ UI, boots the game and compares boot time and frame rate with `tests/baseline.js
 ```bash
 npm run test:e2e                                        # local build, COOP/COEP headers
 npm run test:e2e -- --static                            # local build served like GitHub Pages
+npm run test:e2e -- --static --camera                   # camera lifecycle with a synthetic webcam
 npm run test:e2e -- --url https://shubin123.github.io/eden_web/
 EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip EDEN_ROM=game.nsp npm run test:e2e -- --seconds 120
 ```

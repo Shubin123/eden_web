@@ -311,6 +311,18 @@
         </div>
       </div>
 
+      <div class="card" id="camera-card" data-widget="camera"
+           data-settings="webcam for the Joy-Con IR camera">
+        <h2>📷 Camera</h2>
+        <button type="button" class="btn btn-secondary" id="btn-camera">📷 Start camera</button>
+        <label for="camera-device" class="mode-help field-label">Device</label>
+        <select id="camera-device" class="renderer-select" aria-label="Camera device" disabled></select>
+        <video id="camera-preview" class="camera-preview" autoplay muted playsinline hidden></video>
+        <div class="stat-row"><span class="label">IR camera</span><span id="camera-game" class="value">Not in use</span></div>
+        <div id="camera-status" class="mode-help" aria-live="polite"></div>
+        <div class="mode-help">The webcam stands in for the right Joy-Con's IR camera. The picture stays in this browser.</div>
+      </div>
+
       <div class="card" id="local-play-card" data-widget="local-play"
            data-settings="local wireless linking (not available yet)">
         <h2>📡 Local Play</h2>

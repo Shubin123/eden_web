@@ -13,9 +13,11 @@ const report = { checks: [], log: [] };
 const server = createServer();
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const browser = await puppeteer.launch({
-  executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome-stable',
-  headless: false, protocolTimeout: 360_000,
-  args: ['--enable-unsafe-webgpu', '--enable-features=WebAssemblyMemory64'],
+  executablePath: process.env.CHROME_PATH || (process.platform === 'darwin'
+    ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : '/usr/bin/google-chrome-stable'),
+  headless: process.env.WIDGET_HEADFUL !== '1', protocolTimeout: 360_000,
+  args: ['--enable-unsafe-webgpu', '--enable-features=WebAssemblyMemory64',
+    '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
 });
 const page = await browser.newPage();
 const check = (name, ok, detail) => {
@@ -35,6 +37,12 @@ try {
   await page.waitForFunction(() => document.querySelector('#wasm-status-text').textContent === 'WASM Core Ready', { timeout: 60_000 });
   const caps = await page.evaluate(() => JSON.parse(window.__edenLab.module.ccall('eden_get_capabilities', 'string', [], [])));
   check('core advertises browser audio', caps.audio === 'webaudio' && caps.apiVersion >= 3);
+  check('core advertises camera', caps.operations.includes('camera'));
+  await page.click('#btn-camera');
+  await page.waitForFunction(() => document.querySelector('#camera-preview').videoWidth > 0);
+  check('camera preview starts', await page.$eval('#camera-preview', preview => !preview.hidden && preview.srcObject.active));
+  await page.click('#btn-camera');
+  check('camera preview stops', await page.$eval('#camera-preview', preview => preview.hidden && !preview.srcObject));
   check('CPU widget reflects core', await page.$eval('#engine-cpu', e => e.textContent) === 'Wasm JIT');
   await page.waitForFunction(() => parseFloat(document.querySelector('#engine-heap').textContent) > 0);
   check('performance reads real heap', parseFloat(await page.$eval('#engine-heap', e => e.textContent)) > 0);

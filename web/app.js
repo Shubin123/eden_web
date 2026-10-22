@@ -11,6 +11,7 @@ import { setupInput } from './input.js';
 import { mountRom } from './rom-file.js';
 import { mountBrowserRom } from './browser-rom.js';
 import { setupAudio } from './audio.js';
+import { setupCamera } from './camera.js';
 import { createFrameWatchdog } from './frame-watchdog.js';
 import { isArchive, openArchive } from './archive.js';
 import { CPU_CORES, activeCore, coreEnvironment, findCore, storeCore } from './cores.js';
@@ -786,6 +787,7 @@ window.addEventListener('keydown', (e) => {
 
 // Controller input goes to the engine once a game is running.
 setupInput(() => (isRomLoaded && !crashed ? edenModule : null));
+setupCamera(() => (isRomLoaded && !crashed ? edenModule : null), log);
 
 // Keys & firmware widget
 const systemCard = document.getElementById('system-files-card');

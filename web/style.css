@@ -317,6 +317,17 @@ progress { width: 100%; margin-top: 6px; accent-color: #e94560; }
 .speed-control input { width: 100%; accent-color: #e94560; }
 .audio-toggle { display: flex; gap: 6px; align-items: flex-start; margin-top: 10px; cursor: pointer; }
 .audio-toggle input { accent-color: #e94560; margin-top: 2px; }
+.camera-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  margin: 6px 0;
+  border: 1px solid #0f3460;
+  border-radius: 4px;
+  background: #000;
+}
+.camera-preview[hidden] { display: none; }
 
 .stat-row { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8rem; padding: 2px 0; }
 .stat-row .label { color: #8995aa; flex: none; }

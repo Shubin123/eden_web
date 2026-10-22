@@ -43,6 +43,7 @@ const { values: args } = parseArgs({
     seconds: { type: 'string', default: process.env.E2E_SECONDS || '90' },
     headful: { type: 'boolean', default: false },
     static: { type: 'boolean', default: false },
+    camera: { type: 'boolean', default: false },
     'chrome-log': { type: 'boolean', default: false },
     core: { type: 'string' },
     'crash-at': { type: 'string' },
@@ -130,6 +131,7 @@ const browser = await puppeteer.launch({
   // --chrome-log prints Chrome's own log (GPU process errors, device losses) to stderr.
   dumpio: args['chrome-log'],
   args: ['--enable-unsafe-webgpu', '--enable-features=WebAssemblyMemory64',
+    ...(args.camera ? ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] : []),
     ...(args['chrome-log'] ? ['--enable-logging=stderr', '--v=0'] : []),
     // Extra Chrome flags, e.g. to try GPU backends: E2E_CHROME_ARGS="--use-angle=vulkan".
     ...(process.env.E2E_CHROME_ARGS?.split(/\s+/).filter(Boolean) ?? [])],
@@ -305,6 +307,20 @@ async function runOnce(index) {
     report.wasmSize = await page.$eval('#wasm-size', element => element.textContent);
     check('runtime wasm served', /MB/.test(report.wasmSize), report.wasmSize, 'artifact');
     report.engineExports = await page.evaluate(() => Object.keys(window.__edenLab?.module ?? {}).filter(key => /^_eden_/.test(key)).sort()).catch(() => []);
+
+    if (args.camera && coreReady === 'WASM Core Ready') {
+      check('camera API available', ['_eden_camera_buffer', '_eden_submit_camera', '_eden_get_camera_width']
+        .every(name => report.engineExports.includes(name)), undefined, 'artifact');
+      await page.click('#btn-camera');
+      const cameraStarted = await page.waitForFunction(() => {
+        const preview = document.getElementById('camera-preview');
+        return !preview.hidden && preview.videoWidth > 0 && preview.srcObject?.active;
+      }, { timeout: 15_000 }).then(() => true).catch(() => false);
+      check('camera starts', cameraStarted, undefined, 'init');
+      await page.click('#btn-camera');
+      check('camera stops', await page.$eval('#camera-preview', preview => preview.hidden && !preview.srcObject), undefined, 'init');
+      await page.evaluate(() => window.scrollTo(0, 0));
+    }
 
     if (bootGame && coreReady === 'WASM Core Ready') {
       stage = 'system-files';
