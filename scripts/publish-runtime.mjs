@@ -3,7 +3,7 @@
 // workflow deploys. Pass --deploy to start that workflow afterwards. --variant <name> publishes
 // web/runtime/<name> (from `npm run sync -- --variant <name>`) to the `runtime-<name>` release.
 import { execFileSync } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { RUNTIME_FILES, engineRevision, writeRuntimeManifest } from './runtime-manifest.mjs';
@@ -39,6 +39,12 @@ try {
 }
 run('gh', ['release', 'upload', tag, '--clobber', ...[...RUNTIME_FILES, 'runtime.json'].map(file => path.join(runtime, file))], { stdio: 'inherit' });
 console.log(`Published runtime ${manifest.engineRevision} to release '${tag}'.`);
+
+// Record what each release holds in a tracked file, so engine updates show up in this repo's history.
+const lockPath = path.join(root, 'runtime.lock.json');
+const lock = JSON.parse(await readFile(lockPath, 'utf8').catch(() => '{}'));
+lock[tag] = { engineRevision: manifest.engineRevision, files: manifest.files };
+await writeFile(lockPath, JSON.stringify(Object.fromEntries(Object.entries(lock).sort()), null, 2) + '\n');
 
 if (process.argv.includes('--deploy')) {
   run('gh', ['workflow', 'run', 'pages.yml', '--ref', 'main'], { stdio: 'inherit' });
