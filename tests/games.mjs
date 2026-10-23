@@ -29,6 +29,7 @@
 //                                                   capture (loading takes a varying number of frames);
 //                                                   recording takes the first still screen at least
 //                                                   minSpread detailed
+//     + retryPress: "A", retryEvery?, minChange?    press until it matches (input ignored mid-animation)
 //   { frame, slotRoundTrip: <slot> }                save to that save slot, load it, check the
 //                                                   restarted game reads the slot's files
 //   { frame, exportSave: "<zip>" }                  write the save (createsSave scenarios)
@@ -184,17 +185,37 @@ async function runScenario(lab, scenario, rom, runDir, baseline, progress) {
         const anchorDeadline = Date.now() + (step.timeoutS ?? 120) * 1000;
         // With a recorded capture, wait for the screen to match it. Without one (recording), wait for
         // a drawn screen that holds still across two polls, so a loading screen is never recorded.
-        const settled = (shot, previous) => (reference
-          ? difference(shot.grey, reference.grey) <= tolerance
-          : spread(shot.grey) >= (step.minSpread ?? scenario.minSpread ?? 4) && previous && difference(shot.grey, previous.grey) <= tolerance / 2);
+        // retryPress presses a button every retryEvery frames until then, for input a game ignores
+        // during animations; when recording, the screen must also have changed by minChange since
+        // before the first press, so a press the game ignored is not recorded as its result.
         let previous = null;
         let shot = await shoot(step.anchor);
-        while (!settled(shot, previous)) {
+        const before = shot;
+        let presses = 0;
+        let lastPress = -Infinity;
+        let reactedAt = null;
+        // A game reacting to input animates for a while, so a retried anchor is recorded 60 frames
+        // after the screen first changed rather than once it holds perfectly still.
+        const settled = () => {
+          if (reference) return difference(shot.grey, reference.grey) <= tolerance;
+          if (spread(shot.grey) < (step.minSpread ?? scenario.minSpread ?? 4)) return false;
+          if (step.retryPress) return reactedAt !== null && shot.frame - reactedAt >= 60;
+          return previous && difference(shot.grey, previous.grey) <= tolerance / 2;
+        };
+        while (!settled()) {
           if (Date.now() > anchorDeadline) {
-            throw new Error(`anchor ${step.anchor} never appeared${reference ? ` (diff ${difference(shot.grey, reference.grey).toFixed(1)} > ${tolerance})` : ''}`);
+            throw new Error(`anchor ${step.anchor} never appeared${reference ? ` (diff ${difference(shot.grey, reference.grey).toFixed(1)} > ${tolerance})` : ''}${presses ? ` after ${presses} presses of ${step.retryPress}` : ''}`);
           }
           previous = shot;
-          await session.waitFrame(shot.frame + ANCHOR_POLL_FRAMES, timeoutAt);
+          // Stop pressing once a press has changed the screen; more presses would change it again.
+          const reacted = presses > 0 && difference(shot.grey, before.grey) >= (step.minChange ?? 0);
+          if (reacted && reactedAt === null) reactedAt = shot.frame;
+          if (step.retryPress && !reacted && shot.frame - lastPress >= (step.retryEvery ?? 60)) {
+            await session.press(step.retryPress, step.retryFrames ?? 6);
+            lastPress = await session.frame();
+            presses++;
+          }
+          await session.waitFrame(Math.max(shot.frame, await session.frame()) + ANCHOR_POLL_FRAMES, timeoutAt);
           shot = await shoot(step.anchor);
         }
         origin = shot.frame - step.frame;

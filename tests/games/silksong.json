@@ -49,56 +49,54 @@
       },
       {
         "frame": 5350,
-        "hold": "A",
-        "frames": 12
+        "anchor": "standing",
+        "retryPress": "A",
+        "retryEvery": 90,
+        "retryFrames": 12,
+        "minChange": 2,
+        "timeoutS": 60
       },
       {
         "frame": 5450,
-        "hold": "A",
-        "frames": 12
-      },
-      {
-        "frame": 5700,
         "stick": "left",
         "x": 1,
         "y": 0,
         "frames": 200
       },
       {
-        "frame": 5950,
+        "frame": 5700,
         "checkpoint": "walked-right",
         "expect": "Hornet standing further right in a mossy green cave."
       },
       {
-        "frame": 6000,
+        "frame": 5750,
         "press": "A"
       },
       {
-        "frame": 6020,
+        "frame": 5770,
         "checkpoint": "jump",
         "expect": "Hornet in the air above the cave floor."
       },
       {
-        "frame": 6100,
-        "press": "Plus"
-      },
-      {
-        "frame": 6200,
-        "checkpoint": "pause-menu",
+        "frame": 5850,
+        "anchor": "pause-menu",
+        "retryPress": "Plus",
+        "retryEvery": 120,
+        "minChange": 20,
         "minSpread": 1,
-        "expect": "Silksong's pause menu over the dimmed game."
+        "timeoutS": 60
       },
       {
-        "frame": 6250,
+        "frame": 5950,
         "press": "B"
       },
       {
-        "frame": 6350,
+        "frame": 6050,
         "checkpoint": "resumed",
         "expect": "Gameplay with no menu open."
       },
       {
-        "frame": 6400,
+        "frame": 6100,
         "exportSave": "silksong-first-room.zip"
       }
     ],
@@ -154,42 +152,40 @@
       },
       {
         "frame": 5350,
-        "hold": "A",
-        "frames": 12
+        "anchor": "standing",
+        "retryPress": "A",
+        "retryEvery": 90,
+        "retryFrames": 12,
+        "minChange": 2,
+        "timeoutS": 60
       },
       {
         "frame": 5450,
-        "hold": "A",
-        "frames": 12
-      },
-      {
-        "frame": 5700,
         "stick": "left",
         "x": 1,
         "y": 0,
         "frames": 200
       },
       {
-        "frame": 5950,
+        "frame": 5700,
         "checkpoint": "walked-right",
         "expect": "Hornet standing further right in a mossy green cave."
       },
       {
-        "frame": 6000,
-        "press": "Plus"
-      },
-      {
-        "frame": 6100,
-        "checkpoint": "pause-menu",
+        "frame": 5850,
+        "anchor": "pause-menu",
+        "retryPress": "Plus",
+        "retryEvery": 120,
+        "minChange": 20,
         "minSpread": 1,
-        "expect": "Silksong's pause menu over the dimmed game."
+        "timeoutS": 60
       },
       {
-        "frame": 6150,
+        "frame": 5950,
         "press": "B"
       },
       {
-        "frame": 6250,
+        "frame": 6050,
         "checkpoint": "resumed",
         "expect": "Gameplay with no menu open."
       }
