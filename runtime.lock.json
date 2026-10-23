@@ -1,14 +1,14 @@
 {
   "runtime": {
-    "engineRevision": "v0.0.4-rc2-1084-g51ecec5a0e",
+    "engineRevision": "v0.0.4-rc2-1085-g231cf3c43f",
     "files": {
       "eden.js": {
         "size": 333423,
         "sha256": "077fa07cb87647efffbda658c95fa9b61f272c86346dd7128642a8f95964c013"
       },
       "eden.wasm": {
-        "size": 21560550,
-        "sha256": "4c177af348345995fc718ffd06fff6cd849f623b38fefa50855d30dbfd52d57c"
+        "size": 21562047,
+        "sha256": "52ae1730c102c898256d299e01eb824a0e8f78e84722da6f9410f257e92d5846"
       },
       "eden_archive.js": {
         "size": 72533,
@@ -21,15 +21,15 @@
     }
   },
   "runtime-fused": {
-    "engineRevision": "v0.0.4-rc2-1084-g51ecec5a0e",
+    "engineRevision": "v0.0.4-rc2-1085-g231cf3c43f",
     "files": {
       "eden.js": {
         "size": 333423,
         "sha256": "077fa07cb87647efffbda658c95fa9b61f272c86346dd7128642a8f95964c013"
       },
       "eden.wasm": {
-        "size": 21560550,
-        "sha256": "4c177af348345995fc718ffd06fff6cd849f623b38fefa50855d30dbfd52d57c"
+        "size": 21562047,
+        "sha256": "52ae1730c102c898256d299e01eb824a0e8f78e84722da6f9410f257e92d5846"
       },
       "eden_archive.js": {
         "size": 72533,
