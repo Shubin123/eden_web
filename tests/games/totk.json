@@ -1,0 +1,273 @@
+[
+  {
+    "id": "totk-new-game",
+    "titleId": "0100F2C0115B6000",
+    "createsSave": true,
+    "about": "Fresh profile: tap through the opening cutscenes into the torch-lit tunnel under Hyrule Castle, where the game autosaves. Exports the save later TotK scenarios start from.",
+    "timeoutS": 290,
+    "minFps": 2,
+    "steps": [
+      {
+        "frame": 300,
+        "press": "A"
+      },
+      {
+        "frame": 330,
+        "press": "A"
+      },
+      {
+        "frame": 360,
+        "press": "A"
+      },
+      {
+        "frame": 390,
+        "press": "A"
+      },
+      {
+        "frame": 420,
+        "press": "A"
+      },
+      {
+        "frame": 450,
+        "press": "A"
+      },
+      {
+        "frame": 480,
+        "press": "A"
+      },
+      {
+        "frame": 510,
+        "press": "A"
+      },
+      {
+        "frame": 540,
+        "press": "A"
+      },
+      {
+        "frame": 570,
+        "press": "A"
+      },
+      {
+        "frame": 600,
+        "press": "A"
+      },
+      {
+        "frame": 630,
+        "press": "A"
+      },
+      {
+        "frame": 660,
+        "press": "A"
+      },
+      {
+        "frame": 690,
+        "press": "A"
+      },
+      {
+        "frame": 720,
+        "press": "A"
+      },
+      {
+        "frame": 750,
+        "press": "A"
+      },
+      {
+        "frame": 780,
+        "press": "A"
+      },
+      {
+        "frame": 810,
+        "press": "A"
+      },
+      {
+        "frame": 840,
+        "press": "A"
+      },
+      {
+        "frame": 870,
+        "press": "A"
+      },
+      {
+        "frame": 900,
+        "press": "A"
+      },
+      {
+        "frame": 930,
+        "press": "A"
+      },
+      {
+        "frame": 960,
+        "press": "A"
+      },
+      {
+        "frame": 990,
+        "press": "A"
+      },
+      {
+        "frame": 1020,
+        "press": "A"
+      },
+      {
+        "frame": 1050,
+        "press": "A"
+      },
+      {
+        "frame": 1080,
+        "press": "A"
+      },
+      {
+        "frame": 1130,
+        "stick": "left",
+        "x": 0,
+        "y": 1,
+        "frames": 120
+      },
+      {
+        "frame": 1270,
+        "press": "A"
+      },
+      {
+        "frame": 1300,
+        "press": "A"
+      },
+      {
+        "frame": 1330,
+        "press": "A"
+      },
+      {
+        "frame": 1360,
+        "press": "A"
+      },
+      {
+        "frame": 1390,
+        "press": "A"
+      },
+      {
+        "frame": 1400,
+        "stick": "left",
+        "x": 0,
+        "y": 1,
+        "frames": 150
+      },
+      {
+        "frame": 1560,
+        "checkpoint": "deeper",
+        "expect": "Zelda by the tunnel wall, lit by the torch; no black squares."
+      },
+      {
+        "frame": 1570,
+        "exportSave": "totk-tunnel.zip"
+      }
+    ],
+    "expectedS": 280
+  },
+  {
+    "id": "totk-continue",
+    "titleId": "0100F2C0115B6000",
+    "save": "totk-tunnel.zip",
+    "about": "From the tunnel save: continue from the title menu, then walk Link through the tunnel under Hyrule Castle.",
+    "timeoutS": 290,
+    "minFps": 2,
+    "steps": [
+      {
+        "frame": 300,
+        "press": "A"
+      },
+      {
+        "frame": 340,
+        "press": "A"
+      },
+      {
+        "frame": 380,
+        "press": "A"
+      },
+      {
+        "frame": 420,
+        "press": "A"
+      },
+      {
+        "frame": 460,
+        "press": "A"
+      },
+      {
+        "frame": 500,
+        "press": "A"
+      },
+      {
+        "frame": 540,
+        "press": "A"
+      },
+      {
+        "frame": 580,
+        "press": "A"
+      },
+      {
+        "frame": 620,
+        "press": "A"
+      },
+      {
+        "frame": 660,
+        "press": "A"
+      },
+      {
+        "frame": 700,
+        "press": "A"
+      },
+      {
+        "frame": 740,
+        "press": "A"
+      },
+      {
+        "frame": 780,
+        "press": "A"
+      },
+      {
+        "frame": 820,
+        "press": "A"
+      },
+      {
+        "frame": 860,
+        "press": "A"
+      },
+      {
+        "frame": 900,
+        "anchor": "in-tunnel",
+        "timeoutS": 120,
+        "minSpread": 6
+      },
+      {
+        "frame": 920,
+        "stick": "left",
+        "x": 0,
+        "y": 1,
+        "frames": 200
+      },
+      {
+        "frame": 1130,
+        "checkpoint": "walked",
+        "expect": "Link further along the torch-lit tunnel or in the root-covered chamber."
+      },
+      {
+        "frame": 1140,
+        "press": "A"
+      },
+      {
+        "frame": 1170,
+        "press": "A"
+      },
+      {
+        "frame": 1200,
+        "stick": "left",
+        "x": 0.3,
+        "y": 1,
+        "frames": 200
+      },
+      {
+        "frame": 1410,
+        "checkpoint": "walked-more",
+        "expect": "Link carrying the torch underground, walls lit orange."
+      }
+    ],
+    "expectedS": 250
+  }
+]
