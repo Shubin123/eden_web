@@ -3,7 +3,7 @@
     "id": "totk-new-game",
     "titleId": "0100F2C0115B6000",
     "createsSave": true,
-    "about": "Fresh profile: tap through the opening cutscenes into the torch-lit tunnel under Hyrule Castle, where the game autosaves. Exports the save later TotK scenarios start from.",
+    "about": "Fresh profile: tap through the opening cutscenes into the torch-lit tunnel under Hyrule Castle. Exports the profile and settings saves (TotK has not written a progress save by then).",
     "timeoutS": 290,
     "minFps": 2,
     "steps": [
@@ -165,7 +165,7 @@
     "id": "totk-continue",
     "titleId": "0100F2C0115B6000",
     "save": "totk-tunnel.zip",
-    "about": "From the tunnel save: continue from the title menu, then walk Link through the tunnel under Hyrule Castle.",
+    "about": "From the exported profile: taps through the start again (no progress save exists yet), waits for the tunnel, then walks Link forward with the left stick.",
     "timeoutS": 290,
     "minFps": 2,
     "steps": [
