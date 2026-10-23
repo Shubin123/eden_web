@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Uploads web/runtime (from `npm run sync`) to the `runtime` GitHub release, which the Pages
-// workflow deploys. Pass --deploy to start that workflow afterwards.
+// workflow deploys. Pass --deploy to start that workflow afterwards. --variant <name> publishes
+// web/runtime/<name> (from `npm run sync -- --variant <name>`) to the `runtime-<name>` release.
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -8,13 +9,15 @@ import { fileURLToPath } from 'node:url';
 import { RUNTIME_FILES, engineRevision, writeRuntimeManifest } from './runtime-manifest.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const runtime = path.join(root, 'web/runtime');
+const variantAt = process.argv.indexOf('--variant');
+const variant = variantAt >= 0 ? process.argv[variantAt + 1] : null;
+const runtime = path.join(root, 'web/runtime', variant ?? '');
 const engine = path.resolve(root, '../eden_emscripten');
-const tag = 'runtime';
+const tag = variant ? `runtime-${variant}` : 'runtime';
 
 const run = (command, args, options = {}) => execFileSync(command, args, { cwd: root, encoding: 'utf8', ...options })?.trim();
 
-run(process.execPath, ['tests/web_artifact_smoke.cjs'], { stdio: 'inherit' });
+if (!variant) run(process.execPath, ['tests/web_artifact_smoke.cjs'], { stdio: 'inherit' });
 
 // Only release builds of committed engine sources are published, so the deployed runtime always
 // maps back to a revision anyone can check out.
@@ -32,7 +35,7 @@ try {
   run('gh', ['release', 'view', tag], { stdio: 'ignore' });
 } catch {
   run('gh', ['release', 'create', tag, '--prerelease', '--title', 'Web runtime',
-    '--notes', 'Eden WebAssembly runtime deployed to GitHub Pages. Assets are replaced by `npm run publish-runtime`.']);
+    '--notes', `Eden WebAssembly runtime${variant ? ` (${variant} build)` : ''} deployed to GitHub Pages. Assets are replaced by \`npm run publish-runtime\`.`]);
 }
 run('gh', ['release', 'upload', tag, '--clobber', ...[...RUNTIME_FILES, 'runtime.json'].map(file => path.join(runtime, file))], { stdio: 'inherit' });
 console.log(`Published runtime ${manifest.engineRevision} to release '${tag}'.`);

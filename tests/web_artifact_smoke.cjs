@@ -81,7 +81,9 @@ const glue = fs.readFileSync(requireFile(runtimeDir, 'eden.js'), 'utf8');
 const wasmBytes = fs.readFileSync(requireFile(runtimeDir, 'eden.wasm'));
 
 assert.match(html, /<canvas\s+id=["']canvas["']/i, 'index.html must contain <canvas id="canvas">');
-assert.match(html, /<script src="runtime\/eden\.js">/, 'index.html must load runtime/eden.js');
+// app.js loads eden.js from the selected core's runtime folder (web/cores.js runtimeBase).
+const app = fs.readFileSync(path.join(webDir, 'app.js'), 'utf8');
+assert.match(app, /script\.src = `\$\{runtimeBase\(runningCore\)\}eden\.js`/, 'app.js must load eden.js from the core runtime folder');
 assert.match(glue, /createEdenModule/, 'eden.js must define createEdenModule');
 
 const memoryFlags = importedMemoryFlags(wasmBytes);

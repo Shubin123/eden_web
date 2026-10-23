@@ -14,7 +14,7 @@ import { setupAudio } from './audio.js';
 import { setupCamera } from './camera.js';
 import { createFrameWatchdog } from './frame-watchdog.js';
 import { isArchive, openArchive, storedRomSlice } from './archive.js';
-import { CPU_CORES, activeCore, coreEnvironment, findCore, storeCore } from './cores.js';
+import { CPU_CORES, activeCore, coreEnvironment, findCore, runtimeBase, storeCore } from './cores.js';
 import {
   restoreSaves,
   watchSaves,
@@ -347,9 +347,20 @@ async function showVersion() {
   log(`Eden Web ${parts.join(' · ')}`, 'ui');
 }
 
+/// Loads the engine build of the selected core (its folder holds eden.js and eden.wasm).
+function loadRuntimeScript() {
+  if (typeof createEdenModule === 'function') return Promise.resolve();
+  return new Promise(resolve => {
+    const script = document.createElement('script');
+    script.src = `${runtimeBase(runningCore)}eden.js`;
+    script.onload = script.onerror = () => resolve();
+    document.body.append(script);
+  });
+}
+
 async function inspectWasmBinary() {
   try {
-    const res = await fetch('runtime/eden.wasm', { method: 'HEAD' });
+    const res = await fetch(`${runtimeBase(runningCore)}eden.wasm`, { method: 'HEAD' });
     const len = res.ok ? res.headers.get('content-length') : null;
     wasmSize.textContent = len ? `${(parseInt(len, 10) / (1024 * 1024)).toFixed(1)} MB` : 'Unavailable';
   } catch (err) {
@@ -368,14 +379,15 @@ function initWasmCore() {
 
 async function initWasmCoreOnce() {
   checkIsolation();
+  await loadRuntimeScript();
   await inspectWasmBinary();
 
   if (typeof createEdenModule !== 'function') {
     wasmBadge.className = 'status-badge';
     wasmStatusText.textContent = 'Runtime missing';
-    wasmState.textContent = 'runtime/eden.js not found (run npm run sync)';
-    log('runtime/eden.js not found (run npm run sync).', 'err');
-    diagnostics.fail('artifact', 'runtime/eden.js not found');
+    wasmState.textContent = `${runtimeBase(runningCore)}eden.js not found (run npm run sync)`;
+    log(`${runtimeBase(runningCore)}eden.js not found (run npm run sync).`, 'err');
+    diagnostics.fail('artifact', `${runtimeBase(runningCore)}eden.js not found`);
     initPromise = null;
     return;
   }
@@ -402,7 +414,7 @@ async function initWasmCoreOnce() {
     wasmStatusText.textContent = 'Instantiating WASM...';
     diagnostics.stage('init');
     edenModule = await createEdenModule({
-      locateFile: (path) => 'runtime/' + path,
+      locateFile: (path) => runtimeBase(runningCore) + path,
       preRun: [coreEnvironment(runningCore)],
       print: (text) => { console.log('[Eden]', text); log(text); checkCrashOutput(text); },
       printErr: (text) => { console.error('[Eden]', text); log(text); checkCrashOutput(text); },

@@ -37,18 +37,32 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download runtime --repo "$GITHUB_REPOSITORY" --dir web/runtime --pattern 'eden.*' --pattern 'eden_archive.*' --pattern runtime.json
+      # Optional engine builds for cores that run on them (web/cores.js `runtime`), one release each.
+      - name: Download runtime variants
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for variant in fused; do
+            if gh release view "runtime-$variant" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              gh release download "runtime-$variant" --repo "$GITHUB_REPOSITORY" --dir "web/runtime/$variant" --pattern 'eden.*' --pattern 'eden_archive.*' --pattern runtime.json
+            fi
+          done
       - name: Verify runtime
         run: |
           node -e '
             const { createHash } = require("node:crypto");
             const fs = require("node:fs");
-            const manifest = JSON.parse(fs.readFileSync("web/runtime/runtime.json"));
-            for (const [file, { sha256 }] of Object.entries(manifest.files)) {
-              const actual = createHash("sha256").update(fs.readFileSync("web/runtime/" + file)).digest("hex");
-              if (actual !== sha256) throw new Error(file + " checksum mismatch");
-            }
-            if (manifest.build && manifest.build !== "release") throw new Error("refusing to deploy a " + manifest.build + " build");
-            console.log("Runtime " + manifest.engineRevision + " verified");'
+            const dirs = ["web/runtime", ...fs.readdirSync("web/runtime", { withFileTypes: true })
+              .filter(e => e.isDirectory()).map(e => "web/runtime/" + e.name)];
+            for (const dir of dirs) {
+              const manifest = JSON.parse(fs.readFileSync(dir + "/runtime.json"));
+              for (const [file, { sha256 }] of Object.entries(manifest.files)) {
+                const actual = createHash("sha256").update(fs.readFileSync(dir + "/" + file)).digest("hex");
+                if (actual !== sha256) throw new Error(dir + "/" + file + " checksum mismatch");
+              }
+              if (manifest.build && manifest.build !== "release") throw new Error("refusing to deploy a " + manifest.build + " build from " + dir);
+              console.log(dir + " " + manifest.engineRevision + " verified");
+            }'
           node tests/web_artifact_smoke.cjs
       # One place for the deployed version: package.json version, this commit and the engine revision.
       - name: Write version

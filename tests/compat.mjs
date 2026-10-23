@@ -49,12 +49,12 @@ assert.equal(rec.core.coreId, 'jit');
 assert.equal(rec.core.runs, 3);
 assert.match(rec.reason, /^Wasm JIT: passes, 0 stutters, 58 fps vs IR interpreter: no frames$/);
 assert.equal(rec.evidence, 'automated, 3 runs');
-assert.deepEqual(rec.untested, []);
+assert.deepEqual(rec.untested.map(c => c.id), ['fused']);
 
 rec = recommend([run('jit', 'b', pass(20, 4))], { currentRuntime: 'b' });
 assert.equal(rec.core.coreId, 'jit');
 assert.equal(rec.evidence, 'automated, 1 run');
-assert.deepEqual(rec.untested.map(c => c.id), ['interpreter'], 'an untested core is not ranked as failing');
+assert.deepEqual(rec.untested.map(c => c.id), ['fused', 'interpreter'], 'an untested core is not ranked as failing');
 assert.equal(rec.ranked.length, 1);
 
 rec = recommend([run('jit', 'b', fail('crash'))], { currentRuntime: 'b' });

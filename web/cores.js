@@ -3,8 +3,9 @@
 // at and how it did in testing, followed by the other Switch emulators for comparison. Only Eden is
 // built for WebAssembly, so only its cores are `available`; the others are listed with credit to
 // the people who make them and what a browser port would take. The choice is applied before the
-// runtime starts (as EDEN_* environment variables), so changing it takes a page reload. Mark a
-// core available only once it runs here and has been tested.
+// runtime starts (as EDEN_* environment variables, and `runtime`, the folder of the engine build to
+// load), so changing it takes a page reload. Mark a core available only once it runs here and has
+// been tested.
 
 const STORAGE_KEY = 'eden-cpu-core';
 
@@ -34,6 +35,28 @@ export const CPU_CORES = [
       { game: 'Captain Toad: Treasure Tracker', result: 'Playable: 60 fps menus, ~15 fps in levels; occasionally hangs after ~70 s' },
       { game: 'Blaster Master Zero 3', result: 'Full speed (60 fps)' },
       { game: 'Pikmin 1', result: 'Boots; stops after the first frame (renderer issue)' },
+    ],
+  },
+  {
+    id: 'fused',
+    name: 'Wasm JIT, fused build',
+    emulator: 'Eden (fused)',
+    available: true,
+    runtime: 'runtime/fused/',
+    credits: `${EDEN_CREDITS}; fixes ported from Citron Neo by borb, cheezwiz7899, Zephyron, hopesuffers and collecting (citron Emulator Project)`,
+    links: ['https://github.com/Shubin123/eden_emscripten/releases/tag/fused-2026.10.22', 'https://github.com/citron-neo/emulator'],
+    summary: 'The Wasm JIT on the fused engine build: Eden\'s frame-pacing refactor plus eight fixes ported from Citron Neo. Optional while it is tried on more devices.',
+    env: {},
+    pros: [
+      'Display buffers go back to the game sooner, so frame times are steadier in some games',
+      'Citron fixes for GPU semaphores, instruction-cache invalidation and a Tears of the Kingdom crash',
+    ],
+    cons: [
+      'Measured on one machine so far; results on other architectures may differ',
+    ],
+    tested: [
+      { game: 'Hollow Knight: Silksong', result: 'In-game 32-36 fps with lower frame-time spikes (26-33 fps on the default build), Apple Silicon' },
+      { game: 'Tears of the Kingdom', result: 'Same speed as the default build (~8.5 fps)' },
     ],
   },
   {
@@ -175,6 +198,11 @@ export function storeCore(id) {
   try {
     localStorage.setItem(STORAGE_KEY, id);
   } catch {}
+}
+
+/// The folder of the engine build a core runs on.
+export function runtimeBase(core) {
+  return core.runtime ?? 'runtime/';
 }
 
 /// preRun hook for createEdenModule that exports the core's environment to the runtime.

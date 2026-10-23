@@ -3,6 +3,7 @@
 // follows a launch through its stages and explains a failure, and packs everything a bug report
 // needs into a bundle. The bundle never holds keys, firmware, game data, saves or file paths.
 
+import { activeCore, runtimeBase } from './cores.js';
 import { FAILURE_CATEGORIES } from './results.js';
 
 export const BUNDLE_SCHEMA = 'eden-web/diagnostics@1';
@@ -721,11 +722,12 @@ export function setupDiagnostics(options) {
   window.addEventListener('unhandledrejection', e => recordError(e.reason, 'unhandledrejection'));
 
   async function refreshBuild() {
-    [version, runtime] = await Promise.all([fetchJson('version.json'), fetchJson('runtime/runtime.json')]);
+    const base = runtimeBase(activeCore());
+    [version, runtime] = await Promise.all([fetchJson('version.json'), fetchJson(`${base}runtime.json`)]);
     if (runtime?.files) {
       // A cached file from another build would not match the manifest.
       await Promise.all(Object.entries(runtime.files).map(async ([name, file]) => {
-        const res = await fetch(`runtime/${name}`, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
+        const res = await fetch(`${base}${name}`, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
         const served = Number(res?.headers.get('content-length'));
         if (res && !res.ok) file.missing = true;
         if (served && served !== file.size) Object.assign(file, { mismatch: true, served });
