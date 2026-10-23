@@ -14,7 +14,7 @@ import { setupAudio } from './audio.js';
 import { setupCamera } from './camera.js';
 import { createFrameWatchdog } from './frame-watchdog.js';
 import { isArchive, openArchive, storedRomSlice } from './archive.js';
-import { CPU_CORES, activeCore, coreEnvironment, findCore, runtimeBase, storeCore } from './cores.js';
+import { CPU_CORES, activeCore, coreBackend, coreEnvironment, findCore, runtimeBase, storeCore } from './cores.js';
 import {
   restoreSaves,
   watchSaves,
@@ -480,7 +480,8 @@ function readCoreJson(name) {
 function showCoreInfo() {
   const capabilities = readCoreJson('eden_get_capabilities');
   document.getElementById('engine-api').textContent = capabilities?.apiVersion ?? 'Legacy';
-  const core = findCore(capabilities?.cpuBackend) ?? runningCore;
+  const reported = capabilities?.cpuBackend;
+  const core = !reported || reported === coreBackend(runningCore) ? runningCore : findCore(reported) ?? runningCore;
   document.getElementById('engine-cpu').textContent = core.name;
   document.getElementById('cpu-core-active').textContent = core.name;
   document.getElementById('renderer-backend').textContent = capabilities?.renderer ?? 'WebGPU';

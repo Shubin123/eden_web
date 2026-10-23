@@ -43,8 +43,10 @@ export const CPU_CORES = [
     emulator: 'Eden (fused)',
     available: true,
     runtime: 'runtime/fused/',
+    // Runs the same CPU backend as `jit`, on its own engine build; the engine reports `jit`.
+    backend: 'jit',
     credits: `${EDEN_CREDITS}; fixes ported from Citron Neo by borb, cheezwiz7899, Zephyron, hopesuffers and collecting (citron Emulator Project)`,
-    links: ['https://github.com/Shubin123/eden_emscripten/releases/tag/fused-2026.10.22', 'https://github.com/citron-neo/emulator'],
+    links: ['https://github.com/Shubin123/eden_emscripten/tree/fused', 'https://github.com/citron-neo/emulator'],
     summary: 'The Wasm JIT on the fused engine build: Eden\'s frame-pacing refactor plus eight fixes ported from Citron Neo. Optional while it is tried on more devices.',
     env: {},
     pros: [
@@ -56,7 +58,7 @@ export const CPU_CORES = [
     ],
     tested: [
       { game: 'Hollow Knight: Silksong', result: 'In-game 32-36 fps with lower frame-time spikes (26-33 fps on the default build), Apple Silicon' },
-      { game: 'Tears of the Kingdom', result: 'Same speed as the default build (~8.5 fps)' },
+      { game: 'Tears of the Kingdom', result: 'Opening cutscenes and torch-lit tunnels render without WebGPU errors; ~7-8 fps sustained, Apple Silicon' },
     ],
   },
   {
@@ -175,6 +177,9 @@ export const DEFAULT_CORE = CPU_CORES[0];
 export function findCore(id) {
   return CPU_CORES.find(core => core.id === id);
 }
+
+/// The CPU backend id the engine reports when running `core`.
+export const coreBackend = core => core.backend ?? core.id;
 
 /// Only cores this runtime can run may be selected to run.
 function runnableCore(id) {

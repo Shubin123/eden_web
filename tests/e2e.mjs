@@ -31,7 +31,7 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
 import { createServer } from '../scripts/server.mjs';
-import { CPU_CORES, DEFAULT_CORE, findCore } from '../web/cores.js';
+import { CPU_CORES, DEFAULT_CORE, coreBackend, findCore } from '../web/cores.js';
 import { frameTimeStats, makeResult, makeResultSet, validateResult } from '../web/results.js';
 import { classify, findHang, gameFromFile, mergeGameInfo, summarizeRuns, table } from './lib/lab.mjs';
 import { installSampler } from './lib/sampler.mjs';
@@ -445,7 +445,9 @@ async function runOnce(index) {
       const failedState = report.timeline.find(sample => sample.state === 'Failed' || /ROM Load Failed|Cannot boot|Cannot open/.test(sample.status + sample.romStatus));
       if (core) {
         const reported = consoleLog.find(line => line.includes('CPU core: ') && line.includes('Frontend'));
-        check('engine uses selected core', reported?.includes(`CPU core: ${core.name}`), reported?.replace(/.*CPU core: /, '').replace(/\x1b\[[0-9;]*m/g, '') ?? 'not logged', 'init');
+        // The engine logs the name of the CPU backend, which a core on another engine build shares.
+        const backendName = findCore(coreBackend(core))?.name ?? core.name;
+        check('engine uses selected core', reported?.includes(`CPU core: ${backendName}`), reported?.replace(/.*CPU core: /, '').replace(/\x1b\[[0-9;]*m/g, '') ?? 'not logged', 'init');
       }
       if (args['crash-at'] && runtimeResponsive) {
         const after = report.timeline.filter(sample => report.crashInjectedAt && sample.t > report.crashInjectedAt);
