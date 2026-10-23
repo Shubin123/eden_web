@@ -71,6 +71,39 @@ export const DEFAULT_GAME_DIRS = [
 ];
 export const DEFAULT_SUITE_DIR = path.join(os.homedir(), 'Documents/emulators/games/switch/eden-suite');
 
+/// No test may run longer than this, boot included: a test that needs more is broken or should
+/// start from a later save.
+export const MAX_TEST_S = 300;
+
+/// Runs `fn` with a hard time limit: when it expires every page of the lab browser is closed, so
+/// whatever `fn` is waiting on fails, and the returned promise rejects with a time-limit error.
+export async function withTimeLimit(lab, seconds, fn) {
+  let expired = false;
+  const timer = setTimeout(async () => {
+    expired = true;
+    for (const page of await lab.browser.pages().catch(() => [])) await page.close().catch(() => {});
+  }, seconds * 1000);
+  try {
+    return await fn();
+  } catch (err) {
+    throw expired ? new Error(`stopped after the ${seconds} s time limit (${err.message})`) : err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/// Prints a warning that a first run (recording saves and baselines) takes long, for people and
+/// for agents reading the output. `items` are [name, expected seconds] pairs.
+export function warnFirstRun(items, what) {
+  if (!items.length) return;
+  const minutes = Math.ceil(items.reduce((sum, [, s]) => sum + s, 0) / 60);
+  console.warn([
+    `WARNING: first run. ${items.length} ${what} still ${items.length === 1 ? 'has' : 'have'} to record ${items.length === 1 ? 'its' : 'their'} save or baseline:`,
+    ...items.map(([name, s]) => `  - ${name} (about ${Math.ceil(s / 60)} min)`),
+    `This takes about ${minutes} min in total, up to ${MAX_TEST_S / 60} min per test. Later runs start from the recorded saves.`,
+  ].join('\n'));
+}
+
 /// Maps title IDs to ROM files whose name holds [<title ID>], preferring NSP/XCI over archives.
 export async function findRoms(dirs) {
   const roms = new Map();

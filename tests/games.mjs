@@ -8,6 +8,8 @@
 //
 //   EDEN_KEYS=prod.zip EDEN_FIRMWARE=firmware.zip node tests/games.mjs [options]
 // --record writes baselines (and the saves that createsSave scenarios export) instead of comparing.
+// Every scenario has to finish within 5 minutes (MAX_TEST_S), boot included, and is stopped when
+// it does not; a first run that still has to record saves or baselines warns how long it takes.
 // --only <id> (repeatable) runs only those scenarios; a scenario's save is made first when the
 //   scenario that creates it is selected too. --repeat <n> runs each scenario n times and checks the
 //   runs agree, which measures how deterministic the scenario is.
@@ -38,7 +40,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { frameTimeStats } from '../web/results.js';
-import { DEFAULT_GAME_DIRS, DEFAULT_SUITE_DIR, checkSaveRule, difference, findRoms, launchLab, openGame, saveEntries, spread, thumbnail } from './lib/game-session.mjs';
+import { DEFAULT_GAME_DIRS, DEFAULT_SUITE_DIR, MAX_TEST_S, checkSaveRule, warnFirstRun, withTimeLimit, difference, findRoms, launchLab, openGame, saveEntries, spread, thumbnail } from './lib/game-session.mjs';
 import { createProgress } from './lib/progress.mjs';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -60,6 +62,8 @@ const { values: args } = parseArgs({
 const DEFAULT_TOLERANCE = 28;
 // A segment may run this much slower than its baseline before it counts as a regression.
 const FPS_REGRESSION = 0.8;
+// Shorter segments are not checked for frame rate.
+const MIN_FPS_SEGMENT_S = 5;
 // Anchors are polled this many game frames apart.
 const ANCHOR_POLL_FRAMES = 20;
 
@@ -81,6 +85,9 @@ async function loadScenarios() {
     for (const scenario of [].concat(JSON.parse(await readFile(path.join(dir, name), 'utf8')))) {
       if (!scenario.id || !/^[0-9A-F]{16}$/i.test(scenario.titleId ?? '')) throw new Error(`${name}: scenario needs id and titleId`);
       checkSaveRule(scenario);
+      if ((scenario.timeoutS ?? MAX_TEST_S) > MAX_TEST_S) {
+        throw new Error(`${scenario.id}: timeoutS ${scenario.timeoutS} is over the ${MAX_TEST_S} s limit; split it or start it from a later save`);
+      }
       let last = -1;
       for (const step of scenario.steps) {
         if (!Number.isInteger(step.frame) || step.frame < last) throw new Error(`${scenario.id}: steps must be in frame order`);
@@ -104,7 +111,7 @@ async function runScenario(lab, scenario, rom, runDir, baseline, progress) {
     result.error = `missing save ${savePath}; record the scenario that creates it first`;
     return result;
   }
-  const timeoutAt = Date.now() + (scenario.timeoutS ?? 900) * 1000;
+  const timeoutAt = Date.now() + (scenario.timeoutS ?? MAX_TEST_S) * 1000;
   const lastFrame = scenario.steps.at(-1).frame;
   let session;
   // Save files the game has to read: the scenario's save, then a slot's files after a round trip.
@@ -143,7 +150,7 @@ async function runScenario(lab, scenario, rom, runDir, baseline, progress) {
       for (let i = 1; i < times.length; i += 2) ms.push(times[i]);
       const stats = ms.length ? frameTimeStats(ms) : null;
       result.segments.push({
-        until: name, fps: round(fps),
+        until: name, fps: round(fps), seconds: round((now.time - segmentStart.time) / 1000),
         frameMs: stats ? { p50: round(stats.p50), p95: round(stats.p95), p99: round(stats.p99) } : null,
         stutters: stats?.stutters ?? null,
         guest: guestRates(segmentStart.exec, now.exec),
@@ -244,7 +251,8 @@ function compare(scenario, run, reference, label) {
   }
   for (const segment of run.segments) {
     const expected = reference.segments.find(s => s.until === segment.until);
-    if (expected && segment.until !== 'end' && segment.fps < expected.fps * FPS_REGRESSION) {
+    // A few seconds of frames are too few for a stable rate.
+    if (expected && segment.until !== 'end' && (segment.seconds ?? Infinity) >= MIN_FPS_SEGMENT_S && segment.fps < expected.fps * FPS_REGRESSION) {
       problems.push(`${segment.until}: ${segment.fps} fps vs ${expected.fps} in ${label}`);
     }
   }
@@ -266,6 +274,10 @@ await mkdir(path.join(suiteDir, 'baselines'), { recursive: true });
 await mkdir(path.join(suiteDir, 'saves'), { recursive: true });
 
 const planned = scenarios.filter(s => roms.has(s.titleId.toUpperCase()));
+warnFirstRun(planned
+  .filter(s => args.record || !existsSync(path.join(suiteDir, 'baselines', `${s.id}.json`)) ||
+    (s.save && !existsSync(path.join(suiteDir, 'saves', s.save))))
+  .map(s => [s.id, s.expectedS ?? MAX_TEST_S]), 'scenarios');
 const progress = createProgress(Math.max(1, planned.reduce((sum, s) => sum + s.steps.at(-1).frame, 0) * repeat));
 const lab = await launchLab({ headful: args.headful });
 const summary = [];
@@ -287,7 +299,9 @@ try {
       await mkdir(runDir, { recursive: true });
       const started = Date.now();
       progress.start(`${scenario.id}${repeat > 1 ? ` #${i + 1}/${repeat}` : ''}`, scenario.steps.at(-1).frame);
-      const run = await runScenario(lab, scenario, rom, runDir, baseline, progress);
+      const limit = Math.min(scenario.timeoutS ?? MAX_TEST_S, MAX_TEST_S);
+      const run = await withTimeLimit(lab, limit, () => runScenario(lab, scenario, rom, runDir, baseline, progress))
+        .catch(err => ({ id: scenario.id, ok: false, error: err.message, checkpoints: [], segments: [], exports: [], save: null, slots: [] }));
       progress.finish();
       run.seconds = Math.round((Date.now() - started) / 1000);
       run.problems = run.ok ? [] : [run.error];
@@ -297,7 +311,7 @@ try {
           if (!checkpoint.anchor && checkpoint.spread < (checkpoint.minSpread ?? scenario.minSpread ?? 4)) run.problems.push(`${checkpoint.name} is a blank screen`);
         }
         for (const segment of run.segments) {
-          if (scenario.minFps && segment.until !== 'end' && segment.fps < scenario.minFps) run.problems.push(`${segment.until}: ${segment.fps} fps < ${scenario.minFps}`);
+          if (scenario.minFps && segment.until !== 'end' && (segment.seconds ?? Infinity) >= MIN_FPS_SEGMENT_S && segment.fps < scenario.minFps) run.problems.push(`${segment.until}: ${segment.fps} fps < ${scenario.minFps}`);
         }
         if (baseline && !args.record) run.problems.push(...compare(scenario, run, baseline, 'baseline'));
         if (i > 0 && runs[0].ok) run.problems.push(...compare(scenario, run, runs[0], 'run 1'));

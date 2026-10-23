@@ -27,6 +27,8 @@
 //   goal (default: whether the screen shows `expect` or the goal). Every set starts from a save,
 //   which the game must be seen reading, except a set that creates one; that set exports the save
 //   once all its goals are reached.
+// A goal set has to finish within 5 minutes (MAX_TEST_S), boot included, and is stopped when it
+// does not; a set that still has to create its save warns how long the first run takes.
 // Exit code: 0 every goal reached and no issue reported, 1 otherwise, 2 setup failed.
 
 import { existsSync } from 'node:fs';
@@ -34,7 +36,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_GAME_DIRS, DEFAULT_SUITE_DIR, checkSaveRule, difference, findRoms, launchLab, openGame, saveEntries, spread, thumbnail } from './lib/game-session.mjs';
+import { DEFAULT_GAME_DIRS, DEFAULT_SUITE_DIR, MAX_TEST_S, checkSaveRule, warnFirstRun, withTimeLimit, difference, findRoms, launchLab, openGame, saveEntries, spread, thumbnail } from './lib/game-session.mjs';
 import { actionKey, choiceMenu, createModel, parseChoice, parseObject } from './lib/llm.mjs';
 import { createProgress } from './lib/progress.mjs';
 
@@ -368,6 +370,10 @@ for (const pair of args.rom ?? []) {
 await mkdir(out, { recursive: true });
 const progress = createProgress(Math.max(1, selected.filter(s => roms.has(s.titleId.toUpperCase()))
   .reduce((sum, s) => sum + s.goals.reduce((n, g) => n + (g.maxSteps ?? 30), 0), 0)), { unit: 'step' });
+// Model turns take seconds each, so a set takes roughly ten seconds per step.
+warnFirstRun(selected.filter(s => roms.has(s.titleId.toUpperCase()) && typeof s.createsSave === 'string' &&
+  !existsSync(path.join(suiteDir, 'saves', s.createsSave)))
+  .map(s => [s.id, Math.min(MAX_TEST_S, s.goals.reduce((n, g) => n + (g.maxSteps ?? 30), 0) * 10)]), 'goal sets');
 const lab = await launchLab({ headful: args.headful });
 const results = [];
 let exitCode = 0;
@@ -381,14 +387,17 @@ try {
     }
     const runDir = path.join(out, set.id);
     await mkdir(runDir, { recursive: true });
-    const result = await runGoalSet(lab, set, rom, runDir, progress);
+    const result = await withTimeLimit(lab, MAX_TEST_S, () => runGoalSet(lab, set, rom, runDir, progress)).catch(err => {
+      progress.finish();
+      return { id: set.id, goals: [{ goal: set.goals[0]?.goal ?? '', reached: false, summary: err.message, steps: 0 }], issues: [{ kind: 'timeout', description: err.message }], suspected: [], steps: [], meter: { usd: 0, requests: 0, input: 0, output: 0, ms: [] } };
+    });
     results.push(result);
     if (result.goals.some(g => !g.reached) || result.issues.length) exitCode = 1;
     if (args['emit-scenarios'] && result.goals.every(g => g.reached)) {
       const file = path.join(root, 'tests/games', `agent-${set.id}.json`);
       const steps = result.steps.map(s => (s.checkpoint ? { ...s, expect: set.goals[Number(s.checkpoint.split('-')[1]) - 1].expect ?? set.goals[Number(s.checkpoint.split('-')[1]) - 1].goal } : s));
       if (set.createsSave) steps.push({ frame: steps.at(-1)?.frame ?? 0, exportSave: set.createsSave });
-      await writeFile(file, `${JSON.stringify([{ id: `agent-${set.id}`, titleId: set.titleId, ...(set.save ? { save: set.save } : { createsSave: true }), about: `Recorded by tests/agent.mjs from goal set ${set.id}.`, timeoutS: 1200, steps }], null, 2)}\n`);
+      await writeFile(file, `${JSON.stringify([{ id: `agent-${set.id}`, titleId: set.titleId, ...(set.save ? { save: set.save } : { createsSave: true }), about: `Recorded by tests/agent.mjs from goal set ${set.id}.`, timeoutS: MAX_TEST_S, steps }], null, 2)}\n`);
       progress.log(`  wrote ${path.relative(root, file)} (${steps.length} steps)`);
     }
   }

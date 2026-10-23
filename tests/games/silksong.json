@@ -3,14 +3,14 @@
     "id": "silksong-new-game",
     "titleId": "010013C00E930000",
     "createsSave": true,
-    "about": "Fresh profile: title and profile menus, the opening, then the first room, walking and the pause menu. Exports the save the other Silksong scenarios start from.",
-    "timeoutS": 1500,
+    "about": "Fresh profile: title and profile menus, skip the opening, then the first room: stand up, walk, jump, pause menu. Exports the save the other Silksong scenarios start from.",
+    "timeoutS": 290,
     "minFps": 12,
     "steps": [
       {
         "frame": 2400,
         "anchor": "title-menu",
-        "timeoutS": 240
+        "timeoutS": 120
       },
       {
         "frame": 2550,
@@ -26,67 +26,183 @@
         "press": "A"
       },
       {
-        "frame": 8800,
-        "anchor": "first-room",
-        "timeoutS": 600,
-        "minSpread": 20
-      },
-      {
-        "frame": 8900,
+        "frame": 3600,
         "press": "A"
       },
       {
-        "frame": 9100,
+        "frame": 3625,
+        "press": "A"
+      },
+      {
+        "frame": 4200,
+        "press": "A"
+      },
+      {
+        "frame": 4225,
+        "press": "A"
+      },
+      {
+        "frame": 5000,
+        "anchor": "first-room",
+        "timeoutS": 120,
+        "minSpread": 20
+      },
+      {
+        "frame": 5350,
+        "hold": "A",
+        "frames": 12
+      },
+      {
+        "frame": 5450,
+        "hold": "A",
+        "frames": 12
+      },
+      {
+        "frame": 5700,
         "stick": "left",
         "x": 1,
         "y": 0,
         "frames": 200
       },
       {
-        "frame": 9350,
+        "frame": 5950,
         "checkpoint": "walked-right",
         "expect": "Hornet standing further right in a mossy green cave."
       },
       {
-        "frame": 9400,
+        "frame": 6000,
         "press": "A"
       },
       {
-        "frame": 9420,
+        "frame": 6020,
         "checkpoint": "jump",
         "expect": "Hornet in the air above the cave floor."
       },
       {
-        "frame": 9500,
+        "frame": 6100,
         "press": "Plus"
       },
       {
-        "frame": 9600,
+        "frame": 6200,
         "checkpoint": "pause-menu",
-        "expect": "Silksong's pause menu over the dimmed game.",
-        "minSpread": 1
+        "minSpread": 1,
+        "expect": "Silksong's pause menu over the dimmed game."
       },
       {
-        "frame": 9650,
+        "frame": 6250,
         "press": "B"
       },
       {
-        "frame": 9750,
+        "frame": 6350,
         "checkpoint": "resumed",
         "expect": "Gameplay with no menu open."
       },
       {
-        "frame": 9800,
+        "frame": 6400,
         "exportSave": "silksong-first-room.zip"
       }
-    ]
+    ],
+    "expectedS": 220
   },
   {
     "id": "silksong-continue",
     "titleId": "010013C00E930000",
     "save": "silksong-first-room.zip",
-    "about": "From the first-room save: continue from the profile menu (the save replays the opening) into the first room, walk, use the pause menu, then save to slot 1, load it (the page restarts the game from the slot) and get back into the game.",
-    "timeoutS": 2400,
+    "about": "From the first-room save: continue from the profile menu, skip the opening the save replays, then the first room: walk and use the pause menu.",
+    "timeoutS": 290,
+    "minFps": 12,
+    "steps": [
+      {
+        "frame": 2400,
+        "anchor": "title-menu",
+        "timeoutS": 120
+      },
+      {
+        "frame": 2550,
+        "press": "A"
+      },
+      {
+        "frame": 2600,
+        "anchor": "profile-with-save",
+        "timeoutS": 60
+      },
+      {
+        "frame": 2750,
+        "press": "A"
+      },
+      {
+        "frame": 3600,
+        "press": "A"
+      },
+      {
+        "frame": 3625,
+        "press": "A"
+      },
+      {
+        "frame": 4200,
+        "press": "A"
+      },
+      {
+        "frame": 4225,
+        "press": "A"
+      },
+      {
+        "frame": 5000,
+        "anchor": "first-room-from-save",
+        "timeoutS": 120,
+        "minSpread": 20
+      },
+      {
+        "frame": 5350,
+        "hold": "A",
+        "frames": 12
+      },
+      {
+        "frame": 5450,
+        "hold": "A",
+        "frames": 12
+      },
+      {
+        "frame": 5700,
+        "stick": "left",
+        "x": 1,
+        "y": 0,
+        "frames": 200
+      },
+      {
+        "frame": 5950,
+        "checkpoint": "walked-right",
+        "expect": "Hornet standing further right in a mossy green cave."
+      },
+      {
+        "frame": 6000,
+        "press": "Plus"
+      },
+      {
+        "frame": 6100,
+        "checkpoint": "pause-menu",
+        "minSpread": 1,
+        "expect": "Silksong's pause menu over the dimmed game."
+      },
+      {
+        "frame": 6150,
+        "press": "B"
+      },
+      {
+        "frame": 6250,
+        "checkpoint": "resumed",
+        "expect": "Gameplay with no menu open."
+      }
+    ],
+    "expectedS": 220
+  },
+  {
+    "id": "silksong-save-slot",
+    "titleId": "010013C00E930000",
+    "save": "silksong-first-room.zip",
+    "about": "From the first-room save: on the profile menu (the game has read its save) save to slot 1, load it (the page restarts the game from the slot) and check the restarted game reads the slot back on its profile menu.",
+    "timeoutS": 290,
+    "expectedS": 180,
     "minFps": 12,
     "steps": [
       {
@@ -104,53 +220,13 @@
         "timeoutS": 60
       },
       {
-        "frame": 2750,
-        "press": "A"
-      },
-      {
-        "frame": 8800,
-        "anchor": "first-room-from-save",
-        "timeoutS": 600,
-        "minSpread": 20
-      },
-      {
-        "frame": 8900,
-        "press": "A"
-      },
-      {
-        "frame": 9100,
-        "stick": "left",
-        "x": 1,
-        "y": 0,
-        "frames": 200
-      },
-      {
-        "frame": 9350,
-        "checkpoint": "walked-right",
-        "expect": "Hornet standing further right in a mossy green cave."
-      },
-      {
-        "frame": 9400,
-        "press": "Plus"
-      },
-      {
-        "frame": 9500,
-        "checkpoint": "pause-menu",
-        "minSpread": 1,
-        "expect": "Silksong's pause menu over the dimmed game."
-      },
-      {
-        "frame": 9550,
-        "press": "B"
-      },
-      {
-        "frame": 9650,
+        "frame": 2700,
         "slotRoundTrip": 1
       },
       {
         "frame": 2400,
         "anchor": "title-after-slot",
-        "timeoutS": 300
+        "timeoutS": 240
       },
       {
         "frame": 2550,
@@ -162,19 +238,9 @@
         "timeoutS": 60
       },
       {
-        "frame": 2750,
-        "press": "A"
-      },
-      {
-        "frame": 8800,
-        "anchor": "first-room-from-slot",
-        "timeoutS": 600,
-        "minSpread": 20
-      },
-      {
-        "frame": 8900,
-        "checkpoint": "in-game-from-slot",
-        "expect": "Hornet in the mossy green first room."
+        "frame": 2700,
+        "checkpoint": "profile-from-slot",
+        "expect": "Silksong's profile menu with slot 1 in use."
       }
     ]
   }
