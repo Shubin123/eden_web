@@ -333,6 +333,27 @@
         </div>
       </div>
 
+      <div class="card" id="gamepads-card" data-widget="gamepads"
+           data-settings="game controllers, button layout, multiplayer and rumble">
+        <h2>🎮 Gamepads</h2>
+        <ul id="gamepad-list" class="gamepad-list" aria-live="polite"></ul>
+        <label for="gamepad-layout" class="mode-help field-label">Button layout</label>
+        <select id="gamepad-layout" class="renderer-select" aria-label="Gamepad button layout">
+          <option value="position">Switch positions (bottom button is B)</option>
+          <option value="label">Xbox labels (A button is A)</option>
+        </select>
+        <label class="mode-help audio-toggle">
+          <input type="checkbox" id="gamepad-multiplayer">
+          One player per gamepad (multiplayer)
+        </label>
+        <label class="mode-help audio-toggle">
+          <input type="checkbox" id="gamepad-rumble">
+          Rumble
+        </label>
+        <button type="button" class="btn btn-secondary" id="btn-test-rumble" disabled>Test rumble</button>
+        <div class="mode-help">Keyboard and touch controls always drive player 1. With multiplayer on, gamepads take players 1, 2, 3… in the order they were connected.</div>
+      </div>
+
       <div class="card" id="camera-card" data-widget="camera"
            data-settings="webcam for the Joy-Con IR camera">
         <h2>📷 Camera</h2>

@@ -33,6 +33,12 @@ page.on('pageerror', error => {
 page.on('dialog', d => d.dismiss());
 try {
   await page.evaluateOnNewDocument(installSampler);
+  // Fake gamepads: tests add them to window.__fakePads and record the rumble effects played.
+  await page.evaluateOnNewDocument(() => {
+    window.__fakePads = [];
+    window.__rumbles = [];
+    navigator.getGamepads = () => window.__fakePads;
+  });
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await page.waitForFunction(() => document.querySelector('#wasm-status-text').textContent === 'WASM Core Ready', { timeout: 60_000 });
   const caps = await page.evaluate(() => JSON.parse(window.__edenLab.module.ccall('eden_get_capabilities', 'string', [], [])));
@@ -43,6 +49,34 @@ try {
   check('camera preview starts', await page.$eval('#camera-preview', preview => !preview.hidden && preview.srcObject.active));
   await page.click('#btn-camera');
   check('camera preview stops', await page.$eval('#camera-preview', preview => preview.hidden && !preview.srcObject));
+  check('core advertises players and rumble', caps.operations.includes('players') && caps.operations.includes('rumble'));
+  const padNames = await page.evaluate(async () => {
+    const pad = (index, id) => ({
+      index, id, mapping: 'standard', connected: true,
+      buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })),
+      axes: [0, 0, 0, 0],
+      vibrationActuator: { playEffect: async (type, effect) => { window.__rumbles.push({ index, type, ...effect }); }, reset: async () => {} },
+    });
+    window.__fakePads = [pad(0, 'Fake Pad One'), pad(1, 'Fake Pad Two')];
+    window.dispatchEvent(new Event('gamepadconnected'));
+    await new Promise(r => setTimeout(r, 200));
+    const single = [...document.querySelectorAll('#gamepad-list li')].map(li => li.textContent);
+    const toggle = document.getElementById('gamepad-multiplayer');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    await new Promise(r => setTimeout(r, 200));
+    const multi = [...document.querySelectorAll('#gamepad-list li')].map(li => li.textContent);
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+    document.getElementById('btn-test-rumble').click();
+    await new Promise(r => setTimeout(r, 50));
+    window.__fakePads = [];
+    window.dispatchEvent(new Event('gamepaddisconnected'));
+    return { single, multi, rumbles: window.__rumbles.length };
+  });
+  check('gamepads share player 1 by default', padNames.single.length === 2 && padNames.single.every(t => t.startsWith('Player 1:')), JSON.stringify(padNames.single));
+  check('multiplayer gives each gamepad its own player', padNames.multi[0]?.startsWith('Player 1:') && padNames.multi[1]?.startsWith('Player 2:'), JSON.stringify(padNames.multi));
+  check('test rumble plays on gamepads', padNames.rumbles === 2, padNames.rumbles);
   check('CPU widget reflects core', await page.$eval('#engine-cpu', e => e.textContent) === 'Wasm JIT');
   await page.waitForFunction(() => parseFloat(document.querySelector('#engine-heap').textContent) > 0);
   check('performance reads real heap', parseFloat(await page.$eval('#engine-heap', e => e.textContent)) > 0);

@@ -17,6 +17,8 @@ const expectedExports = [
     'eden_shutdown',
     'eden_set_button',
     'eden_set_stick',
+    'eden_set_player_connected',
+    'eden_get_rumble',
     'eden_camera_buffer',
     'eden_submit_camera',
     'eden_get_camera_width',

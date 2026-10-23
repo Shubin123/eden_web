@@ -890,7 +890,34 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Controller input goes to the engine once a game is running.
-setupInput(() => (isRomLoaded && !crashed ? edenModule : null));
+const gamepads = setupInput(() => (isRomLoaded && !crashed ? edenModule : null));
+{
+  const list = document.getElementById('gamepad-list');
+  const layout = document.getElementById('gamepad-layout');
+  const multiplayer = document.getElementById('gamepad-multiplayer');
+  const rumble = document.getElementById('gamepad-rumble');
+  const testRumble = document.getElementById('btn-test-rumble');
+  layout.value = gamepads.prefs.layout;
+  multiplayer.checked = gamepads.prefs.multiplayer;
+  rumble.checked = gamepads.prefs.rumble;
+  layout.addEventListener('change', () => gamepads.setLayout(layout.value));
+  multiplayer.addEventListener('change', () => gamepads.setMultiplayer(multiplayer.checked));
+  rumble.addEventListener('change', () => gamepads.setRumble(rumble.checked));
+  testRumble.addEventListener('click', () => gamepads.testRumble());
+  gamepads.onChange(pads => {
+    list.replaceChildren(...(pads.length ? pads.map(pad => {
+      const item = document.createElement('li');
+      const notes = [pad.standard ? '' : 'non-standard mapping, buttons may be mixed up', pad.rumble ? '' : 'no rumble']
+        .filter(Boolean).join('; ');
+      item.textContent = `Player ${pad.player}: ${pad.id}${notes ? ` (${notes})` : ''}`;
+      return item;
+    }) : [Object.assign(document.createElement('li'), {
+      className: 'mode-help',
+      textContent: 'No gamepad yet. Connect one and press a button so the browser shows it.',
+    })]));
+    testRumble.disabled = !pads.some(pad => pad.rumble);
+  });
+}
 setupCamera(() => (isRomLoaded && !crashed ? edenModule : null), log);
 
 // Keys & firmware widget

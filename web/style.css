@@ -636,3 +636,6 @@ kbd {
 #diagnostics-card .core-actions { margin-top: 8px; }
 #diagnostics-card .core-actions .btn { width: auto; margin-bottom: 0; }
 #diagnostics-card .core-actions + .mode-help { margin-top: 6px; }
+
+.gamepad-list { list-style: none; margin: 0 0 8px; padding: 0; font-size: 0.85rem; }
+.gamepad-list li { padding: 3px 0; overflow-wrap: anywhere; }
