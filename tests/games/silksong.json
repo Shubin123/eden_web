@@ -78,6 +78,10 @@
         "expect": "Hornet in the air above the cave floor."
       },
       {
+        "frame": 5780,
+        "exportSave": "silksong-first-room.zip"
+      },
+      {
         "frame": 5850,
         "anchor": "pause-menu",
         "retryPress": "Plus",
@@ -94,10 +98,6 @@
         "frame": 6050,
         "checkpoint": "resumed",
         "expect": "Gameplay with no menu open."
-      },
-      {
-        "frame": 6100,
-        "exportSave": "silksong-first-room.zip"
       }
     ],
     "expectedS": 220
