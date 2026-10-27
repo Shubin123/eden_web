@@ -129,11 +129,19 @@ const coreReady = page => page.waitForFunction(
   () => document.querySelector('#wasm-status-text').textContent === 'WASM Core Ready', { timeout: 120_000 });
 
 /// Starts the local server and Chrome. One browser profile is shared by every game it opens.
+/// EDEN_LAB_PROFILE=<dir> keeps that profile across runs, so imported keys and firmware and the
+/// browser's compiled runtime are reused; storage is per origin, so the server then listens on a
+/// fixed port (EDEN_LAB_PORT, default 8791) and only one such lab can run at a time.
 export async function launchLab({ headful = false } = {}) {
+  const profile = process.env.EDEN_LAB_PROFILE;
   const server = createServer();
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(profile ? Number(process.env.EDEN_LAB_PORT || 8791) : 0, '127.0.0.1', resolve);
+  });
   const browser = await puppeteer.launch({
     executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    ...(profile ? { userDataDir: path.resolve(profile) } : {}),
     headless: !headful,
     protocolTimeout: 900_000,
     // EDEN_CHROME_ARGS adds Chrome switches, e.g. --js-flags=... for engine experiments.
@@ -143,12 +151,21 @@ export async function launchLab({ headful = false } = {}) {
   return {
     browser,
     port,
-    /// Imports keys and firmware once; the profile keeps them for every later game.
+    /// Imports keys and firmware once; the profile keeps them for every later game. A kept profile
+    /// (EDEN_LAB_PROFILE) that already has both skips the import.
     async installSystemFiles(keys, firmware) {
       const page = await browser.newPage();
       try {
         await page.goto(`http://127.0.0.1:${port}/`);
         await coreReady(page);
+        if (profile) {
+          const installed = await page.waitForFunction(() => {
+            const keys = document.querySelector('#sys-prod-keys').textContent;
+            const nand = document.querySelector('#sys-firmware').textContent;
+            return keys !== '--' && nand !== '--' && keys === 'Installed' && /NCA/.test(nand);
+          }, { timeout: 5_000 }).then(() => true, () => false);
+          if (installed) return;
+        }
         for (const [selector, file] of [['#keys-input', keys], ['#firmware-input', firmware]]) {
           await (await page.$(selector)).uploadFile(file);
           await page.waitForFunction(() => /^(Imported|Import failed)/.test(document.querySelector('#sys-progress').textContent), { timeout: 300_000 });

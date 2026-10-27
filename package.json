@@ -15,7 +15,8 @@
     "test:agent": "node tests/agent.mjs",
     "compare:games": "node tests/compare-games.mjs",
     "compare": "node scripts/compare-results.mjs",
-    "publish-runtime": "node scripts/publish-runtime.mjs"
+    "publish-runtime": "node scripts/publish-runtime.mjs",
+    "bench:cpu": "node tests/cpu-bench.mjs"
   },
   "devDependencies": {
     "puppeteer-core": "^23.11.1"
