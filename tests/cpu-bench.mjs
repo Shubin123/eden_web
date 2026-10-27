@@ -6,7 +6,8 @@
 // whatever load there is hits them alike.
 //
 //   EDEN_KEYS=prod.zip EDEN_FIRMWARE=fw.zip node tests/cpu-bench.mjs --runtime <dir> [--runtime <dir> ...]
-//       [--scenario silksong-title|toad|silksong-new-game] [--rounds 2] [--frames 600] [--settle 600]
+//       [--scenario silksong-title|toad|silksong-new-game|nier] [--rounds 2] [--frames 600] [--settle 600]
+//       [--rom <titleId>=<file>]
 // A --runtime directory holds eden.js and eden.wasm (a build's bin/ works); each is copied into
 // web/runtime for its run, and the original runtime is put back afterwards. The first is the
 // reference. EDEN_LAB_PROFILE=<dir> keeps the browser profile between runs (imported keys and
@@ -30,6 +31,7 @@ const { values: args } = parseArgs({
     frames: { type: 'string', default: '600' },
     settle: { type: 'string', default: '600' },
     'games-dir': { type: 'string', multiple: true },
+    rom: { type: 'string', multiple: true },
     out: { type: 'string' },
   },
 });
@@ -40,11 +42,19 @@ if (!keys || !firmware || !args.runtime?.length) {
   process.exit(2);
 }
 
-// Each scenario boots a title and presses A on a schedule (game frames) until the scene is on screen.
+// Each scenario boots a title and presses A on a schedule (game frames) until the scene is on screen;
+// a press can also be [frame, button].
 const SCENARIOS = {
   'silksong-title': { titleId: '010013C00E930000', presses: [], reachFrame: 2400, walk: null },
   'silksong-new-game': { titleId: '010013C00E930000', presses: Array.from({ length: 37 }, (_, i) => 2400 + 100 * i), walk: [1, 0] },
   toad: { titleId: '01009BF0072D4000', presses: Array.from({ length: 24 }, (_, i) => 300 + 60 * i), walk: [0.5, 0.5] },
+  // NieR:Automata from a fresh profile into the opening flight; its dialogs default to No, so each
+  // A follows a Left. Use --settle 1200 to measure the shoot-em-up over the sea.
+  nier: {
+    titleId: '0100B8E016F76000',
+    presses: Array.from({ length: 35 }, (_, i) => [[300 + 100 * i, 'Left'], [330 + 100 * i, 'A']]).flat(),
+    walk: null,
+  },
 };
 const scenario = SCENARIOS[args.scenario];
 if (!scenario) {
@@ -53,6 +63,10 @@ if (!scenario) {
 }
 
 const roms = await findRoms(args['games-dir'] ?? process.env.EDEN_GAMES_DIRS?.split(':').filter(Boolean) ?? DEFAULT_GAME_DIRS);
+for (const pair of args.rom ?? []) {
+  const at = pair.indexOf('=');
+  roms.set(pair.slice(0, at).toUpperCase(), path.resolve(pair.slice(at + 1)));
+}
 const rom = roms.get(scenario.titleId);
 if (!rom) {
   console.error(`No ROM for ${scenario.titleId} found.`);
@@ -81,13 +95,14 @@ async function measure(label) {
     await lab.installSystemFiles(keys, firmware);
     const session = await openGame(lab, { rom, stallS: 90 });
     if (scenario.reachFrame) await session.waitFrame(scenario.reachFrame, deadline);
-    for (const frame of scenario.presses) {
+    const presses = scenario.presses.map(press => (Array.isArray(press) ? press : [press, 'A']));
+    for (const [frame, button] of presses) {
       await session.waitFrame(frame, deadline);
-      await session.press('A', 6);
+      await session.press(button, 6);
     }
     // Two detailed captures in a row: a loading screen is never measured as the scene.
     let detailed = 0;
-    for (let frame = (scenario.presses.at(-1) ?? scenario.reachFrame) + 100; detailed < 2; frame += 100) {
+    for (let frame = (presses.at(-1)?.[0] ?? scenario.reachFrame) + 100; detailed < 2; frame += 100) {
       if (Date.now() > deadline) throw new Error('scene not reached in time');
       await session.waitFrame(frame, deadline);
       const shot = await session.capture();
