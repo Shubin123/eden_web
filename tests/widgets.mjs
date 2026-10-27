@@ -50,6 +50,19 @@ try {
   await page.click('#btn-camera');
   check('camera preview stops', await page.$eval('#camera-preview', preview => preview.hidden && !preview.srcObject));
   check('core advertises players and rumble', caps.operations.includes('players') && caps.operations.includes('rumble'));
+  check('core advertises a speed limit', caps.operations.includes('speedLimit'));
+  const speed = () => page.evaluate(() => ({
+    limit: window.__edenLab.module._eden_get_speed_limit(),
+    mode: document.querySelector('#speed-mode').textContent,
+  }));
+  await page.select('#speed-limit', '0');
+  const uncapped = await speed();
+  check('speed widget uncaps the engine', uncapped.limit === 0 && uncapped.mode === 'Uncapped', JSON.stringify(uncapped));
+  await page.keyboard.down('Alt');
+  await page.keyboard.press('KeyU');
+  await page.keyboard.up('Alt');
+  const capped = await speed();
+  check('Alt+U caps it again at 100%', capped.limit === 100 && capped.mode === 'Capped at 100%', JSON.stringify(capped));
   const padNames = await page.evaluate(async () => {
     const pad = (index, id) => ({
       index, id, mapping: 'standard', connected: true,

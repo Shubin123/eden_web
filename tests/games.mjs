@@ -17,7 +17,8 @@
 //   ~/Documents/emulators/games/switch/eden-suite). Saves are user data and never go in the repo.
 // --games-dir <dir> (repeatable; or EDEN_GAMES_DIRS separated by colons) is searched for ROMs whose
 //   file name holds the scenario's [title ID]; --rom <titleId>=<file> (repeatable) names one
-//   directly. --core <id>, --headful, --out <dir>.
+//   directly. --core <id>, --headful, --out <dir>. --uncapped runs without the speed limit (games
+//   exceed their frame cap; frame counts still time the steps).
 //
 // Steps, in order; `frame` counts game frames from boot, from the last matched anchor, or from the
 // restart after a slotRoundTrip:
@@ -55,6 +56,7 @@ const { values: args } = parseArgs({
     rom: { type: 'string', multiple: true },
     core: { type: 'string' },
     headful: { type: 'boolean', default: false },
+    uncapped: { type: 'boolean', default: false },
     out: { type: 'string' },
   },
 });
@@ -120,6 +122,7 @@ async function runScenario(lab, scenario, rom, runDir, baseline, progress) {
   try {
     session = await openGame(lab, {
       rom, save: savePath, titleId: scenario.titleId, core: args.core, stallS: scenario.stallS ?? 60,
+      speedLimit: args.uncapped ? 0 : 100,
       onProgress: frame => progress.update(frame + origin),
     });
     progress.update(0, 'running');

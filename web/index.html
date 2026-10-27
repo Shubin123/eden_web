@@ -318,6 +318,23 @@
         <div class="stat-row"><span class="label">Shader compiles</span><span id="engine-shaders" class="value">--</span></div>
       </div>
 
+      <div class="card" id="speed-card" data-widget="speed"
+           data-settings="speed limit: capped at normal speed, 200% or 300%, or uncapped (Alt+U)">
+        <h2>⏩ Speed</h2>
+        <div class="stat-row"><span class="label">Mode</span><span id="speed-mode" class="value highlight">--</span></div>
+        <div class="stat-row"><span class="label">Game FPS</span><span id="speed-fps" class="value">--</span></div>
+        <div class="stat-row"><span class="label">Peak FPS</span><span id="speed-peak" class="value">--</span></div>
+        <label for="speed-limit" class="mode-help field-label">Speed limit</label>
+        <select id="speed-limit" class="renderer-select" aria-label="Speed limit">
+          <option value="100">Capped — 100%, normal speed</option>
+          <option value="200">Capped — 200%</option>
+          <option value="300">Capped — 300%</option>
+          <option value="0">Uncapped — no limit</option>
+        </select>
+        <button type="button" class="btn btn-secondary" id="btn-uncap">⏩ Uncap</button>
+        <div id="speed-help" class="mode-help">Uncapped also lifts the game's own frame cap: games that time themselves by frames run faster than normal, others just draw more frames. Alt+U toggles it.</div>
+      </div>
+
       <div class="card" id="audio-card" data-widget="audio"
            data-settings="game sound, mute and volume">
         <h2>🔊 Audio</h2>

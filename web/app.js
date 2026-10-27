@@ -249,7 +249,9 @@ setInterval(pollAudio, 500);
 
 // Display settings, remembered per browser. The page works without storage.
 const SETTINGS_KEY = 'eden-settings';
-const settings = { filter: 'smooth', fit: 'contain', joycons: true, fullscreenJoycons: false };
+const settings = {
+  filter: 'smooth', fit: 'contain', joycons: true, fullscreenJoycons: false, speedLimit: 100, lastCappedLimit: 100,
+};
 try {
   Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
 } catch (_) {}
@@ -286,6 +288,52 @@ for (const [input, key, read] of [
   });
 }
 applySettings();
+
+// Speed widget: capped at a percentage of the Switch's speed, or uncapped (0), which also lifts the
+// game's own frame cap. The engine applies it at once, even mid-game.
+const speedLimit = document.getElementById('speed-limit');
+const speedMode = document.getElementById('speed-mode');
+const speedFps = document.getElementById('speed-fps');
+const speedPeak = document.getElementById('speed-peak');
+const speedHelp = document.getElementById('speed-help');
+const btnUncap = document.getElementById('btn-uncap');
+let peakFps = 0;
+
+function applySpeedLimit() {
+  speedLimit.value = String(settings.speedLimit);
+  const supported = typeof edenModule?._eden_set_speed_limit === 'function';
+  if (edenModule && !supported) {
+    speedLimit.disabled = btnUncap.disabled = true;
+    speedHelp.textContent = 'This engine build has no speed limit control; games run at normal speed.';
+  }
+  if (supported && !crashed) edenModule._eden_set_speed_limit(settings.speedLimit);
+  showSpeedLimit(supported && !crashed ? edenModule._eden_get_speed_limit() : settings.speedLimit);
+}
+
+function showSpeedLimit(limit) {
+  speedMode.textContent = limit === 0 ? 'Uncapped' : `Capped at ${limit}%`;
+  btnUncap.textContent = limit === 0 ? `⏸ Cap at ${settings.lastCappedLimit}%` : '⏩ Uncap';
+}
+
+function setSpeedLimit(limit) {
+  settings.speedLimit = limit;
+  if (limit > 0) settings.lastCappedLimit = limit;
+  saveSettings();
+  peakFps = 0;
+  speedPeak.textContent = '--';
+  applySpeedLimit();
+  log(`Speed: ${speedMode.textContent}.`, 'ui');
+}
+
+speedLimit.addEventListener('change', () => setSpeedLimit(Number(speedLimit.value)));
+btnUncap.addEventListener('click', () => setSpeedLimit(settings.speedLimit === 0 ? settings.lastCappedLimit : 0));
+window.addEventListener('keydown', (e) => {
+  if (e.altKey && e.code === 'KeyU' && !btnUncap.disabled) {
+    e.preventDefault();
+    btnUncap.click();
+  }
+});
+applySpeedLimit();
 
 // Renderer info: the WebGPU adapter the browser would hand the engine.
 async function inspectGpu() {
@@ -421,6 +469,7 @@ async function initWasmCoreOnce() {
       onAbort: (what) => onCrash(`runtime aborted: ${what}`),
     });
     isInitialized = true;
+    applySpeedLimit();
     showCoreInfo();
     pollAudio();
     statusTimer ??= setInterval(pollStatus, 500);
@@ -533,6 +582,7 @@ function pollStatus() {
   if (isRunning) attachPipStream();
   if (state !== lastState) {
     lastState = state;
+    if (state === 1) peakFps = 0;
     log(`Emulation state: ${name}`, state === 4 ? 'err' : 'ui');
   }
   if (state === 4) {
@@ -551,8 +601,14 @@ function pollStatus() {
   fpsCounter.textContent = `${gameFps.toFixed(1)} FPS`;
   systemFps.textContent = `${finite(edenModule._eden_get_system_fps()).toFixed(1)} FPS`;
   frametimeCounter.textContent = `${finite(edenModule._eden_get_frametime()).toFixed(2)} ms`;
-  emuSpeed.textContent = `${speed.toFixed(0)}%`;
-  fpsCaption.textContent = isRunning ? `${gameFps.toFixed(1)} FPS · ${speed.toFixed(0)}%` : '';
+  const limit = edenModule._eden_get_speed_limit?.() ?? 100;
+  const uncapped = limit === 0;
+  if (edenModule._eden_get_speed_limit) showSpeedLimit(limit);
+  emuSpeed.textContent = `${speed.toFixed(0)}%${uncapped ? ' · uncapped' : ''}`;
+  fpsCaption.textContent = isRunning ? `${gameFps.toFixed(1)} FPS · ${uncapped ? 'uncapped' : `${speed.toFixed(0)}%`}` : '';
+  if (isRunning) peakFps = Math.max(peakFps, gameFps);
+  speedFps.textContent = isRunning ? `${gameFps.toFixed(1)} FPS` : '--';
+  speedPeak.textContent = peakFps > 0 ? `${peakFps.toFixed(1)} FPS` : '--';
 }
 
 function startLoop() {
@@ -1085,6 +1141,7 @@ async function onCrash(reason) {
   wasmStatusText.textContent = `Crashed: ${currentRomName}`;
   fpsCaption.textContent = '';
   fpsCounter.textContent = '--';
+  speedFps.textContent = '--';
   systemFps.textContent = '--';
   frametimeCounter.textContent = '-- ms';
   emuSpeed.textContent = '--';

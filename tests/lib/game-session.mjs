@@ -197,8 +197,9 @@ export function checkSaveRule(scenario) {
 /// Boots `rom` in a fresh page, from `save` (a ZIP of Eden save folders) or from no save at all.
 /// With a save, the page records which save files the game opens, and saveCheck() reports whether
 /// the imported files reached the engine unchanged and whether the game read them.
-/// `onProgress(frame)` is called while waiting for frames.
-export async function openGame(lab, { rom, save = null, titleId = null, core = null, stallS = 60, onProgress = () => {} }) {
+/// `onProgress(frame)` is called while waiting for frames. `speedLimit` is the emulation speed limit
+/// in percent, 0 for uncapped; it is always set, so a limit remembered by the page never leaks in.
+export async function openGame(lab, { rom, save = null, titleId = null, core = null, stallS = 60, speedLimit = 100, onProgress = () => {} }) {
   const page = await lab.browser.newPage();
   const log = [];
   page.on('console', m => log.push(m.text()));
@@ -228,6 +229,7 @@ export async function openGame(lab, { rom, save = null, titleId = null, core = n
   if (!(await page.evaluate(() => typeof window.__edenLab.module?._eden_get_game_frames === 'function'))) {
     throw new Error('runtime has no eden_get_game_frames; rebuild the engine');
   }
+  await page.evaluate(v => window.__edenLab.module._eden_set_speed_limit?.(v), speedLimit);
   await page.evaluate(async () => (await import('./recovery.js')).clearSaves());
   if (save) {
     await (await page.$('#saves-import-input')).uploadFile(save);
