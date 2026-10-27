@@ -65,13 +65,15 @@ try {
   check('Alt+U caps it again at 100%', capped.limit === 100 && capped.mode === 'Capped at 100%', JSON.stringify(capped));
   const padNames = await page.evaluate(async () => {
     const pad = (index, id) => ({
-      index, id, mapping: 'standard', connected: true,
+      index, id, mapping: 'standard', connected: true, timestamp: performance.now(),
       buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })),
       axes: [0, 0, 0, 0],
       vibrationActuator: { playEffect: async (type, effect) => { window.__rumbles.push({ index, type, ...effect }); }, reset: async () => {} },
     });
     window.__fakePads = [pad(0, 'Fake Pad One'), pad(1, 'Fake Pad Two')];
-    window.dispatchEvent(new Event('gamepadconnected'));
+    // Browsers attach the pad to its event, and the runtime's own gamepad listener reads it.
+    const padEvent = (type, gamepad) => Object.assign(new Event(type), { gamepad });
+    for (const fake of window.__fakePads) window.dispatchEvent(padEvent('gamepadconnected', fake));
     await new Promise(r => setTimeout(r, 200));
     const single = [...document.querySelectorAll('#gamepad-list li')].map(li => li.textContent);
     const toggle = document.getElementById('gamepad-multiplayer');
@@ -83,8 +85,9 @@ try {
     toggle.dispatchEvent(new Event('change'));
     document.getElementById('btn-test-rumble').click();
     await new Promise(r => setTimeout(r, 50));
+    const removed = window.__fakePads;
     window.__fakePads = [];
-    window.dispatchEvent(new Event('gamepaddisconnected'));
+    for (const fake of removed) window.dispatchEvent(padEvent('gamepaddisconnected', fake));
     return { single, multi, rumbles: window.__rumbles.length };
   });
   check('gamepads share player 1 by default', padNames.single.length === 2 && padNames.single.every(t => t.startsWith('Player 1:')), JSON.stringify(padNames.single));
