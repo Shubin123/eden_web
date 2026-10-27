@@ -291,15 +291,13 @@
       {
         "frame": 4400,
         "checkpoint": "clouds",
-        "minSpread": 8
-      },
-      {
-        "frame": 5000,
-        "checkpoint": "flight-units"
+        "minSpread": 8,
+        "expect": "Flight units over or inside the clouds during the opening cutscene; their thrusters and bodies are drawn."
       },
       {
         "frame": 5600,
-        "checkpoint": "sea-combat"
+        "checkpoint": "sea-combat",
+        "expect": "Shoot-em-up over the sea: dark flight units with thruster flames, enemies or explosions, the HUD; nothing invisible but the flames."
       },
       {
         "frame": 5610,
