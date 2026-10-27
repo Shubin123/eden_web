@@ -136,7 +136,8 @@ export async function launchLab({ headful = false } = {}) {
     executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     headless: !headful,
     protocolTimeout: 900_000,
-    args: ['--enable-unsafe-webgpu', '--enable-features=WebAssemblyMemory64'],
+    // EDEN_CHROME_ARGS adds Chrome switches, e.g. --js-flags=... for engine experiments.
+    args: ['--enable-unsafe-webgpu', '--enable-features=WebAssemblyMemory64', ...(process.env.EDEN_CHROME_ARGS?.split(' ').filter(Boolean) ?? [])],
   });
   const port = server.address().port;
   return {
