@@ -1,0 +1,310 @@
+[
+  {
+    "id": "nier-new-game",
+    "titleId": "0100B8E016F76000",
+    "createsSave": true,
+    "about": "Fresh profile: through the logos and menus (Left then A accepts the dialogs that default to No), creates save slot 1, then the opening flight: the cloud cutscene and the shoot-em-up over the sea. Flight units, enemies and explosions must be drawn (they go through passthrough geometry shaders and compute). Exports the save it created.",
+    "timeoutS": 290,
+    "minFps": 10,
+    "tolerance": 40,
+    "steps": [
+      {
+        "frame": 300,
+        "press": "Left"
+      },
+      {
+        "frame": 330,
+        "press": "A"
+      },
+      {
+        "frame": 400,
+        "press": "Left"
+      },
+      {
+        "frame": 430,
+        "press": "A"
+      },
+      {
+        "frame": 500,
+        "press": "Left"
+      },
+      {
+        "frame": 530,
+        "press": "A"
+      },
+      {
+        "frame": 600,
+        "press": "Left"
+      },
+      {
+        "frame": 630,
+        "press": "A"
+      },
+      {
+        "frame": 700,
+        "press": "Left"
+      },
+      {
+        "frame": 730,
+        "press": "A"
+      },
+      {
+        "frame": 800,
+        "press": "Left"
+      },
+      {
+        "frame": 830,
+        "press": "A"
+      },
+      {
+        "frame": 900,
+        "press": "Left"
+      },
+      {
+        "frame": 930,
+        "press": "A"
+      },
+      {
+        "frame": 1000,
+        "press": "Left"
+      },
+      {
+        "frame": 1030,
+        "press": "A"
+      },
+      {
+        "frame": 1100,
+        "press": "Left"
+      },
+      {
+        "frame": 1130,
+        "press": "A"
+      },
+      {
+        "frame": 1200,
+        "press": "Left"
+      },
+      {
+        "frame": 1230,
+        "press": "A"
+      },
+      {
+        "frame": 1300,
+        "press": "Left"
+      },
+      {
+        "frame": 1330,
+        "press": "A"
+      },
+      {
+        "frame": 1400,
+        "press": "Left"
+      },
+      {
+        "frame": 1430,
+        "press": "A"
+      },
+      {
+        "frame": 1500,
+        "press": "Left"
+      },
+      {
+        "frame": 1530,
+        "press": "A"
+      },
+      {
+        "frame": 1600,
+        "press": "Left"
+      },
+      {
+        "frame": 1630,
+        "press": "A"
+      },
+      {
+        "frame": 1700,
+        "press": "Left"
+      },
+      {
+        "frame": 1730,
+        "press": "A"
+      },
+      {
+        "frame": 1800,
+        "press": "Left"
+      },
+      {
+        "frame": 1830,
+        "press": "A"
+      },
+      {
+        "frame": 1900,
+        "press": "Left"
+      },
+      {
+        "frame": 1930,
+        "press": "A"
+      },
+      {
+        "frame": 2000,
+        "press": "Left"
+      },
+      {
+        "frame": 2030,
+        "press": "A"
+      },
+      {
+        "frame": 2100,
+        "press": "Left"
+      },
+      {
+        "frame": 2130,
+        "press": "A"
+      },
+      {
+        "frame": 2200,
+        "press": "Left"
+      },
+      {
+        "frame": 2230,
+        "press": "A"
+      },
+      {
+        "frame": 2300,
+        "press": "Left"
+      },
+      {
+        "frame": 2330,
+        "press": "A"
+      },
+      {
+        "frame": 2400,
+        "press": "Left"
+      },
+      {
+        "frame": 2430,
+        "press": "A"
+      },
+      {
+        "frame": 2500,
+        "press": "Left"
+      },
+      {
+        "frame": 2530,
+        "press": "A"
+      },
+      {
+        "frame": 2600,
+        "press": "Left"
+      },
+      {
+        "frame": 2630,
+        "press": "A"
+      },
+      {
+        "frame": 2700,
+        "press": "Left"
+      },
+      {
+        "frame": 2730,
+        "press": "A"
+      },
+      {
+        "frame": 2800,
+        "press": "Left"
+      },
+      {
+        "frame": 2830,
+        "press": "A"
+      },
+      {
+        "frame": 2900,
+        "press": "Left"
+      },
+      {
+        "frame": 2930,
+        "press": "A"
+      },
+      {
+        "frame": 3000,
+        "press": "Left"
+      },
+      {
+        "frame": 3030,
+        "press": "A"
+      },
+      {
+        "frame": 3100,
+        "press": "Left"
+      },
+      {
+        "frame": 3130,
+        "press": "A"
+      },
+      {
+        "frame": 3200,
+        "press": "Left"
+      },
+      {
+        "frame": 3230,
+        "press": "A"
+      },
+      {
+        "frame": 3300,
+        "press": "Left"
+      },
+      {
+        "frame": 3330,
+        "press": "A"
+      },
+      {
+        "frame": 3400,
+        "press": "Left"
+      },
+      {
+        "frame": 3430,
+        "press": "A"
+      },
+      {
+        "frame": 3500,
+        "press": "Left"
+      },
+      {
+        "frame": 3530,
+        "press": "A"
+      },
+      {
+        "frame": 3600,
+        "press": "Left"
+      },
+      {
+        "frame": 3630,
+        "press": "A"
+      },
+      {
+        "frame": 3700,
+        "press": "Left"
+      },
+      {
+        "frame": 3730,
+        "press": "A"
+      },
+      {
+        "frame": 4400,
+        "checkpoint": "clouds",
+        "minSpread": 8
+      },
+      {
+        "frame": 5000,
+        "checkpoint": "flight-units"
+      },
+      {
+        "frame": 5600,
+        "checkpoint": "sea-combat"
+      },
+      {
+        "frame": 5610,
+        "exportSave": "nier-new-game.zip"
+      }
+    ]
+  }
+]
