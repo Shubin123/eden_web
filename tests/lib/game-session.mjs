@@ -199,7 +199,8 @@ export function checkSaveRule(scenario) {
 /// the imported files reached the engine unchanged and whether the game read them.
 /// `onProgress(frame)` is called while waiting for frames. `speedLimit` is the emulation speed limit
 /// in percent, 0 for uncapped; it is always set, so a limit remembered by the page never leaks in.
-export async function openGame(lab, { rom, save = null, titleId = null, core = null, stallS = 60, speedLimit = 100, onProgress = () => {} }) {
+/// `presentInterval` presents only every n-th game frame, which keeps game speed and frame counts.
+export async function openGame(lab, { rom, save = null, titleId = null, core = null, stallS = 60, speedLimit = 100, presentInterval = 1, onProgress = () => {} }) {
   const page = await lab.browser.newPage();
   const log = [];
   page.on('console', m => log.push(m.text()));
@@ -230,6 +231,13 @@ export async function openGame(lab, { rom, save = null, titleId = null, core = n
     throw new Error('runtime has no eden_get_game_frames; rebuild the engine');
   }
   await page.evaluate(v => window.__edenLab.module._eden_set_speed_limit?.(v), speedLimit);
+  const presents = await page.evaluate(v => {
+    const set = window.__edenLab.module._eden_set_present_interval;
+    if (set) set(v);
+    return Boolean(set);
+  }, presentInterval);
+  // An older engine would present every frame, which would not compare with one that skips.
+  if (!presents && presentInterval > 1) throw new Error('runtime has no eden_set_present_interval; rebuild the engine or present every frame');
   await page.evaluate(async () => (await import('./recovery.js')).clearSaves());
   if (save) {
     await (await page.$('#saves-import-input')).uploadFile(save);

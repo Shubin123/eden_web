@@ -7,12 +7,14 @@
 //
 //   EDEN_KEYS=prod.zip EDEN_FIRMWARE=fw.zip node tests/cpu-bench.mjs --runtime <dir> [--runtime <dir> ...]
 //       [--scenario silksong-title|toad|silksong-new-game|nier] [--rounds 2] [--frames 600] [--settle 600]
-//       [--rom <titleId>=<file>]
+//       [--rom <titleId>=<file>] [--present-every 4]
 // A --runtime directory holds eden.js and eden.wasm (a build's bin/ works); each is copied into
 // web/runtime for its run, and the original runtime is put back afterwards. The first is the
 // reference. EDEN_LAB_PROFILE=<dir> keeps the browser profile between runs (imported keys and
 // firmware, compiled code), which saves the import each run. ROMs are found as in tests/games.mjs.
-// Each run is limited to MAX_TEST_S.
+// --present-every n presents only every n-th game frame (game speed and frame counts unchanged), so
+// the browser composites less; use 1 to compare with engines older than eden_set_present_interval. Guest cycles per real second, over all cores, show how much guest work
+// the build keeps up with. Each run is limited to MAX_TEST_S.
 
 import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -30,6 +32,7 @@ const { values: args } = parseArgs({
     rounds: { type: 'string', default: '2' },
     frames: { type: 'string', default: '600' },
     settle: { type: 'string', default: '600' },
+    'present-every': { type: 'string', default: '4' },
     'games-dir': { type: 'string', multiple: true },
     rom: { type: 'string', multiple: true },
     out: { type: 'string' },
@@ -78,11 +81,12 @@ await mkdir(out, { recursive: true });
 const runtimeDir = path.join(root, 'web/runtime');
 const FILES = ['eden.js', 'eden.wasm'];
 
-/// CPU seconds the page's renderer process has used, summed over its threads.
-function rendererCpu(lab) {
+/// CPU seconds a browser child process of `type` (renderer: the page; gpu-process: compositing and
+/// WebGPU) has used, summed over its threads.
+function processCpu(lab, type = 'renderer') {
   const seconds = t => t.split(':').reduce((acc, part) => acc * 60 + Number(part), 0);
   const rows = execFileSync('ps', ['-Ao', 'pid,ppid,time,command'], { encoding: 'utf8' }).split('\n')
-    .map(row => row.trim().split(/\s+/)).filter(f => Number(f[1]) === lab.browser.process().pid && f.slice(3).join(' ').includes('--type=renderer'));
+    .map(row => row.trim().split(/\s+/)).filter(f => Number(f[1]) === lab.browser.process().pid && f.slice(3).join(' ').includes(`--type=${type}`));
   return Math.max(0, ...rows.map(f => seconds(f[2])));
 }
 
@@ -93,7 +97,7 @@ async function measure(label) {
   const result = { label, ok: false };
   try {
     await lab.installSystemFiles(keys, firmware);
-    const session = await openGame(lab, { rom, stallS: 90 });
+    const session = await openGame(lab, { rom, stallS: 90, presentInterval: Number(args['present-every']) });
     if (scenario.reachFrame) await session.waitFrame(scenario.reachFrame, deadline);
     const presses = scenario.presses.map(press => (Array.isArray(press) ? press : [press, 'A']));
     for (const [frame, button] of presses) {
@@ -117,21 +121,25 @@ async function measure(label) {
     await drain();
     const f0 = await session.frame();
     const e0 = await session.execStats();
-    const cpu0 = rendererCpu(lab);
+    const cpu0 = processCpu(lab);
+    const gpu0 = processCpu(lab, 'gpu-process');
     const t0 = Date.now();
     const walking = scenario.walk ? session.stick('left', ...scenario.walk, frames + 60) : Promise.resolve();
     await session.waitFrame(f0 + frames, deadline);
     const seconds = (Date.now() - t0) / 1000;
     const f1 = await session.frame();
     const e1 = await session.execStats();
-    result.cpuS = rendererCpu(lab) - cpu0;
+    result.cpuS = processCpu(lab) - cpu0;
+    result.gpuProcessS = processCpu(lab, 'gpu-process') - gpu0;
     await walking.catch(() => {});
     result.cpuMsPerFrame = 1000 * result.cpuS / (f1 - f0);
+    result.gpuProcessMsPerFrame = 1000 * result.gpuProcessS / (f1 - f0);
     result.fps = (f1 - f0) / seconds;
     const times = await drain();
     result.frameMs = frameTimeStats(times.filter((_, i) => i % 2));
     const delta = i => e1.cycles[i] - e0.cycles[i];
     result.core0Mcps = delta(0) / seconds / 1e6;
+    result.guestMcps = e1.cycles.reduce((sum, _, i) => sum + delta(i), 0) / seconds / 1e6;
     result.core0PerBusyS = delta(0) / ((e1.busyMs[0] - e0.busyMs[0]) / 1000) / 1e6;
     result.ok = true;
   } catch (err) {
@@ -159,7 +167,7 @@ try {
       results.push(result);
       const f = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '-');
       console.log(result.error ? `${label}: ERROR ${result.error}`
-        : `${label}: ${f(result.cpuMsPerFrame)} ms CPU/frame, ${f(result.fps)} fps, frame ms ${f(result.frameMs?.p50)}/${f(result.frameMs?.p95)}/${f(result.frameMs?.p99)}, ` +
+        : `${label}: ${f(result.cpuMsPerFrame)} ms CPU/frame (+${f(result.gpuProcessMsPerFrame)} GPU process), ${f(result.guestMcps, 0)} M guest cycles/s, ${f(result.fps)} fps, frame ms ${f(result.frameMs?.p50)}/${f(result.frameMs?.p95)}/${f(result.frameMs?.p99)}, ` +
           `core 0 ${f(result.core0PerBusyS, 0)} M guest cycles per busy s, scene at ${f(result.sceneAtS, 0)} s`);
     }
   }
@@ -168,11 +176,18 @@ try {
   await writeFile(path.join(out, 'cpu-bench.json'), JSON.stringify({ scenario: args.scenario, results }, null, 2));
 }
 
-// Median CPU per frame of each build against the reference.
+// Medians of each build against the reference.
 const median = values => [...values].sort((a, b) => a - b)[values.length >> 1];
 const byBuild = new Map();
-for (const r of results.filter(r => r.ok)) byBuild.set(r.label.replace(/#\d+$/, ''), [...(byBuild.get(r.label.replace(/#\d+$/, '')) ?? []), r.cpuMsPerFrame]);
-const reference = [...byBuild.values()][0] && median([...byBuild.values()][0]);
-console.log(`\n${args.scenario}, ${args.frames} frames per run, median CPU ms/frame:`);
-for (const [build, values] of byBuild) console.log(`  ${build.padEnd(20)} ${median(values).toFixed(1)}${reference ? ` (${(median(values) / reference).toFixed(2)}x)` : ''}  runs ${values.map(v => v.toFixed(1)).join(' ')}`);
+for (const r of results.filter(r => r.ok)) {
+  const build = r.label.replace(/#\d+$/, '');
+  byBuild.set(build, [...(byBuild.get(build) ?? []), r]);
+}
+const reference = [...byBuild.values()][0];
+const ratio = (values, key) => (reference ? ` (${(median(values.map(r => r[key])) / median(reference.map(r => r[key]))).toFixed(2)}x)` : '');
+console.log(`\n${args.scenario}, ${args.frames} frames per run, presenting every ${args['present-every']}; medians of CPU ms/frame and guest M cycles/s:`);
+for (const [build, runs] of byBuild) {
+  console.log(`  ${build.padEnd(20)} ${median(runs.map(r => r.cpuMsPerFrame)).toFixed(1)}${ratio(runs, 'cpuMsPerFrame')}  ` +
+    `${median(runs.map(r => r.guestMcps)).toFixed(0)}${ratio(runs, 'guestMcps')}  runs ${runs.map(r => r.cpuMsPerFrame.toFixed(1)).join(' ')}`);
+}
 process.exit(results.every(r => r.ok) ? 0 : 1);
