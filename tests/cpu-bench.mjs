@@ -141,6 +141,10 @@ async function measure(label) {
     result.core0Mcps = delta(0) / seconds / 1e6;
     result.guestMcps = e1.cycles.reduce((sum, _, i) => sum + delta(i), 0) / seconds / 1e6;
     result.core0PerBusyS = delta(0) / ((e1.busyMs[0] - e0.busyMs[0]) / 1000) / 1e6;
+    // The core doing the most guest work bounds the game; its cycles per busy second are its speed.
+    const busiest = e1.cycles.reduce((best, _, i) => (delta(i) > delta(best) ? i : best), 0);
+    result.busiestCore = busiest;
+    result.busiestPerBusyS = delta(busiest) / ((e1.busyMs[busiest] - e0.busyMs[busiest]) / 1000) / 1e6;
     result.ok = true;
   } catch (err) {
     result.error = err.message;
@@ -168,7 +172,7 @@ try {
       const f = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '-');
       console.log(result.error ? `${label}: ERROR ${result.error}`
         : `${label}: ${f(result.cpuMsPerFrame)} ms CPU/frame (+${f(result.gpuProcessMsPerFrame)} GPU process), ${f(result.guestMcps, 0)} M guest cycles/s, ${f(result.fps)} fps, frame ms ${f(result.frameMs?.p50)}/${f(result.frameMs?.p95)}/${f(result.frameMs?.p99)}, ` +
-          `core 0 ${f(result.core0PerBusyS, 0)} M guest cycles per busy s, scene at ${f(result.sceneAtS, 0)} s`);
+          `core 0 ${f(result.core0PerBusyS, 0)}, core ${result.busiestCore} (busiest) ${f(result.busiestPerBusyS, 0)} M guest cycles per busy s, scene at ${f(result.sceneAtS, 0)} s`);
     }
   }
 } finally {
