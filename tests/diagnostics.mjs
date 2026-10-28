@@ -55,6 +55,15 @@ const keys = classifyFailure({ stage: 'boot', detail: 'Boot failed', loadResult:
 assert.equal(keys.category, 'system-files');
 assert.match(keys.fix, /prod\.keys missing/);
 
+// A Switch 2 title is named as the cause, whatever the load result or crash looks like.
+const switch2Boot = classifyFailure({ stage: 'boot', detail: 'Boot failed', loadResult: 7 + 33, switch2: true });
+assert.match(switch2Boot.detail, /^Nintendo Switch 2 game: /);
+assert.match(switch2Boot.fix, /Switch 2 games are not supported yet/);
+const switch2Crash = classifyFailure({ stage: 'running', category: 'crash', detail: 'runtime aborted', switch2: true });
+assert.equal(switch2Crash.category, 'crash');
+assert.match(switch2Crash.fix, /Switch 2 games are not supported yet/);
+assert.equal(switch2Crash.widget, null);
+assert.doesNotMatch(classifyFailure({ stage: 'boot', detail: 'Boot failed', loadResult: 7 + 33 }).fix, /Switch 2/);
 const abort = classifyFailure({ stage: 'running', category: 'crash', detail: 'runtime aborted: Aborted(RuntimeError: unreachable)' });
 assert.equal(abort.origin, 'engine');
 assert.equal(classifyFailure({ stage: 'running', detail: 'no frames for 46 s' }).category, 'hang');

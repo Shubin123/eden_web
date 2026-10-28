@@ -288,8 +288,10 @@ const FIXES = {
   performance: 'The game runs below full speed. Close other tabs and check the Performance widget.',
 };
 
+const SWITCH2_FIX = 'This is a Nintendo Switch 2 game. Eden Web runs Nintendo Switch games; Switch 2 games are not supported yet.';
+
 /// Picks the failure category, origin and fix for a launch failure.
-/// event: { stage, category?, detail (string or Error), loadResult?, systemFiles?, preflight? }
+/// event: { stage, category?, detail (string or Error), loadResult?, systemFiles?, preflight?, switch2? }
 export function classifyFailure(event) {
   const detail = event.detail instanceof Error ? event.detail.message : String(event.detail ?? '');
   let category = event.category ?? null;
@@ -326,6 +328,13 @@ export function classifyFailure(event) {
     else if (/GPU/i.test(detail)) fix = 'WebGPU failed to start. Turn on graphics acceleration in the browser settings and check chrome://gpu; this engine has no WebGL fallback.';
   }
   if (category === 'crash' || category === 'hang') widget = 'emulation';
+  // The engine read the game's control data and found a Switch 2 title: that, not the dump or
+  // the setup, is why it fails.
+  if (event.switch2 && category !== 'environment' && category !== 'artifact') {
+    text = text ? `Nintendo Switch 2 game: ${text}` : 'Nintendo Switch 2 game';
+    fix = SWITCH2_FIX;
+    widget = null;
+  }
   let origin = errorOrigin(event.detail, category);
   if (category === 'system-files') origin = 'setup';
   else if (['crash', 'hang', 'no-frames'].includes(category) || Number.isInteger(event.loadResult)) origin = 'engine';
@@ -497,6 +506,7 @@ export function readEngineInfo(Module) {
   info.status = {
     state: number('_eden_get_state'),
     loadResult: number('_eden_get_load_result'),
+    switch2: number('_eden_is_switch2_title'),
     gameFps: number('_eden_get_game_fps'),
     systemFps: number('_eden_get_system_fps'),
     frametimeMs: number('_eden_get_frametime'),
@@ -676,7 +686,8 @@ export function setupDiagnostics(options) {
     const systemFiles = await options.getSystemFileStatus?.().catch(() => null);
     const loadResult = options.getModule()?._eden_get_state?.() === 4
       ? Number(options.getModule()._eden_get_load_result()) : undefined;
-    launch.failure = classifyFailure({ stage: failedStage, category, detail, loadResult, systemFiles, preflight: preflight ?? quick });
+    const switch2 = options.getModule()?._eden_is_switch2_title?.() === 1;
+    launch.failure = classifyFailure({ stage: failedStage, category, detail, loadResult, systemFiles, preflight: preflight ?? quick, switch2 });
     launch.history.push({ stage: 'failed', at: new Date().toISOString(), category: launch.failure.category });
     renderStage();
   }

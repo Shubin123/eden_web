@@ -584,10 +584,15 @@ function pollStatus() {
     lastState = state;
     if (state === 1) peakFps = 0;
     log(`Emulation state: ${name}`, state === 4 ? 'err' : 'ui');
+    if ((state === 2 || state === 4) && edenModule._eden_is_switch2_title?.() === 1) {
+      log('This is a Nintendo Switch 2 game. Switch 2 games are not supported yet, so it may not boot or run correctly.', 'err');
+    }
   }
   if (state === 4) {
     loader.fail();
-    wasmStatusText.textContent = `Boot failed (load result ${edenModule._eden_get_load_result()})`;
+    wasmStatusText.textContent = edenModule._eden_is_switch2_title?.() === 1
+      ? 'Boot failed: Nintendo Switch 2 games are not supported yet'
+      : `Boot failed (load result ${edenModule._eden_get_load_result()})`;
     romStatus.textContent = gpuFailure ? `GPU initialization failed: ${gpuFailure}. This runtime has no WebGL fallback; see the engine log for adapter/device errors.` : wasmStatusText.textContent;
   } else if (state >= 1 && state <= 3) {
     wasmStatusText.textContent = `${name}: ${currentRomName}`;
