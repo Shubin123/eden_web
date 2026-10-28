@@ -1,14 +1,14 @@
 {
   "runtime": {
-    "engineRevision": "v0.0.4-rc2-1114-gaa0f4f2008",
+    "engineRevision": "v0.0.4-rc2-1115-g61f89a331e",
     "files": {
       "eden.js": {
-        "size": 334236,
-        "sha256": "1eb5925d9a56efe921bcf644e6bc435d654ed26c98cfddaf024c0840400de957"
+        "size": 334454,
+        "sha256": "d8d85088ab7b7e8bc4027861e2eee7b6ca9801ed787198e3dd375b988aff8195"
       },
       "eden.wasm": {
-        "size": 21734159,
-        "sha256": "634cca7372e61c37e3f2b78f5c84e21b33abc93a1c78ca1b684df7b76bd4a260"
+        "size": 21734261,
+        "sha256": "5df6ad8c0f9def08052527a01ff15c223e03bd1a7bc9c4affee0679710e19402"
       },
       "eden_archive.js": {
         "size": 72533,
