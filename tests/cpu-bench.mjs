@@ -124,14 +124,15 @@ async function measure(label) {
     const cpu0 = processCpu(lab);
     const gpu0 = processCpu(lab, 'gpu-process');
     const t0 = Date.now();
-    const walking = scenario.walk ? session.stick('left', ...scenario.walk, frames + 60) : Promise.resolve();
+    // Caught here: if the run fails first, closing the page must not leave it rejected unhandled.
+    const walking = scenario.walk ? session.stick('left', ...scenario.walk, frames + 60).catch(() => {}) : Promise.resolve();
     await session.waitFrame(f0 + frames, deadline);
     const seconds = (Date.now() - t0) / 1000;
     const f1 = await session.frame();
     const e1 = await session.execStats();
     result.cpuS = processCpu(lab) - cpu0;
     result.gpuProcessS = processCpu(lab, 'gpu-process') - gpu0;
-    await walking.catch(() => {});
+    await walking;
     result.cpuMsPerFrame = 1000 * result.cpuS / (f1 - f0);
     result.gpuProcessMsPerFrame = 1000 * result.gpuProcessS / (f1 - f0);
     result.fps = (f1 - f0) / seconds;
