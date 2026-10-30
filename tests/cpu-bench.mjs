@@ -6,15 +6,16 @@
 // whatever load there is hits them alike.
 //
 //   EDEN_KEYS=prod.zip EDEN_FIRMWARE=fw.zip node tests/cpu-bench.mjs --runtime <dir> [--runtime <dir> ...]
-//       [--scenario silksong-title|toad|silksong-new-game|nier] [--rounds 2] [--frames 600] [--settle 600]
-//       [--rom <titleId>=<file>] [--present-every 4]
+//       [--scenario silksong-title|toad|silksong-new-game|silksong-grotto|nier] [--rounds 2] [--frames 600] [--settle 600]
+//       [--rom <titleId>=<file>] [--present-every 4] [--headful]
 // A --runtime directory holds eden.js and eden.wasm (a build's bin/ works); each is copied into
 // web/runtime for its run, and the original runtime is put back afterwards. The first is the
 // reference. EDEN_LAB_PROFILE=<dir> keeps the browser profile between runs (imported keys and
 // firmware, compiled code), which saves the import each run. ROMs are found as in tests/games.mjs.
 // --present-every n presents only every n-th game frame (game speed and frame counts unchanged), so
 // the browser composites less; use 1 to compare with engines older than eden_set_present_interval. Guest cycles per real second, over all cores, show how much guest work
-// the build keeps up with. Each run is limited to MAX_TEST_S.
+// the build keeps up with. --headful runs Chrome in a window, so frames go through a real display's
+// compositor and vsync as when playing. Each run is limited to MAX_TEST_S.
 
 import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -33,6 +34,7 @@ const { values: args } = parseArgs({
     frames: { type: 'string', default: '600' },
     settle: { type: 'string', default: '600' },
     'present-every': { type: 'string', default: '4' },
+    headful: { type: 'boolean', default: false },
     'games-dir': { type: 'string', multiple: true },
     rom: { type: 'string', multiple: true },
     out: { type: 'string' },
@@ -50,6 +52,8 @@ if (!keys || !firmware || !args.runtime?.length) {
 const SCENARIOS = {
   'silksong-title': { titleId: '010013C00E930000', presses: [], reachFrame: 2400, walk: null },
   'silksong-new-game': { titleId: '010013C00E930000', presses: Array.from({ length: 37 }, (_, i) => 2400 + 100 * i), walk: [1, 0] },
+  // Gets up and walks into the room left of the opening one, a heavier scene than the opening room.
+  'silksong-grotto': { titleId: '010013C00E930000', presses: Array.from({ length: 37 }, (_, i) => 2400 + 100 * i), walk: [-1, 0], lead: 3 },
   toad: { titleId: '01009BF0072D4000', presses: Array.from({ length: 24 }, (_, i) => 300 + 60 * i), walk: [0.5, 0.5] },
   // NieR:Automata from a fresh profile into the opening flight; its dialogs default to No, so each
   // A follows a Left. Use --settle 1200 to measure the shoot-em-up over the sea.
@@ -93,7 +97,7 @@ function processCpu(lab, type = 'renderer') {
 async function measure(label) {
   const started = Date.now();
   const deadline = started + (MAX_TEST_S - 10) * 1000;
-  const lab = await launchLab();
+  const lab = await launchLab({ headful: args.headful });
   const result = { label, ok: false };
   try {
     await lab.installSystemFiles(keys, firmware);
@@ -113,6 +117,12 @@ async function measure(label) {
       result.spread = spread(await thumbnail(session.page, shot.png));
       detailed = result.spread > 25 ? detailed + 1 : 0;
       if (!detailed && scenario.walk) await session.press('A', 6);
+    }
+    // Walks with a jump now and then for `lead` rounds before settling.
+    for (let i = 0; i < (scenario.lead ?? 0); ++i) {
+      const walking = session.stick('left', ...scenario.walk, 100);
+      await session.press('A', 20);
+      await walking;
     }
     result.sceneAtS = (Date.now() - started) / 1000;
     const frames = Number(args.frames);
